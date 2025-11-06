@@ -6,7 +6,7 @@ import sys
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import auth, documents, proposals, templates, knowledge
+from app.api import auth, documents, proposals, templates, knowledge, search
 
 # 配置日志
 logger.remove()
@@ -90,6 +90,7 @@ app.include_router(documents.router, prefix=f"{settings.API_PREFIX}/documents", 
 app.include_router(proposals.router, prefix=f"{settings.API_PREFIX}/proposals", tags=["方案生成"])
 app.include_router(templates.router, prefix=f"{settings.API_PREFIX}/templates", tags=["模板管理"])
 app.include_router(knowledge.router, prefix=f"{settings.API_PREFIX}/knowledge", tags=["知识库"])
+app.include_router(search.router, prefix=f"{settings.API_PREFIX}/search", tags=["语义搜索"])
 
 
 if __name__ == "__main__":

@@ -12,6 +12,8 @@ from app.core.config import settings
 from app.models import Document, DocumentType, User
 from app.api.auth import get_current_active_user
 from app.services.document_processor import DocumentProcessor
+from app.services.vector_service import vector_service
+from loguru import logger
 
 router = APIRouter()
 
@@ -99,8 +101,35 @@ async def upload_document(
     db.commit()
     db.refresh(db_document)
 
-    # 异步处理文档（提取文本、向量化等）
-    # TODO: 实现异步任务
+    # 提取文本并向量化
+    try:
+        # 提取文本
+        text_content = DocumentProcessor.extract_text(file_path)
+        db_document.content_text = text_content
+
+        # 向量化
+        vector_id = vector_service.add_document(
+            doc_id=db_document.id,
+            title=title,
+            content=text_content,
+            metadata={
+                "type": doc_type.value,
+                "industry": industry,
+                "customer_name": customer_name,
+            }
+        )
+
+        db_document.vector_id = vector_id
+        db_document.is_vectorized = 1
+
+        db.commit()
+        db.refresh(db_document)
+
+        logger.info(f"文档 {db_document.id} 处理完成")
+
+    except Exception as e:
+        logger.error(f"文档处理失败: {e}")
+        # 即使处理失败，文档记录仍然保存
 
     return db_document
 
@@ -161,13 +190,19 @@ async def delete_document(
     if not document:
         raise HTTPException(status_code=404, detail="文档不存在")
 
+    # 删除向量数据
+    if document.vector_id:
+        try:
+            vector_service.delete_document(document.vector_id)
+        except Exception as e:
+            logger.error(f"删除向量数据失败: {e}")
+
     # 删除物理文件
     try:
         if os.path.exists(document.file_path):
             os.remove(document.file_path)
     except Exception as e:
-        # 记录日志但不抛出异常
-        print(f"删除文件失败: {e}")
+        logger.error(f"删除文件失败: {e}")
 
     # 删除数据库记录
     db.delete(document)

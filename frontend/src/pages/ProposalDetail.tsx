@@ -87,12 +87,20 @@ const ProposalDetail = () => {
             </Button>
           )}
           {proposal.status === 'completed' && (
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => handleExport('docx')}
-            >
-              导出Word
-            </Button>
+            <>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => window.open(`/api/v1/proposals/${proposal.id}/export?format=docx`, '_blank')}
+              >
+                导出Word
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => window.open(`/api/v1/proposals/${proposal.id}/export?format=xlsx`, '_blank')}
+              >
+                导出报价单
+              </Button>
+            </>
           )}
           <Button onClick={() => navigate('/proposals')}>返回</Button>
         </Space>

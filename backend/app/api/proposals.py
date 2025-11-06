@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.models import Proposal, ProposalStatus, User
 from app.api.auth import get_current_active_user
 from app.services.proposal_generator import ProposalGenerator
+from app.services.export_service import export_service
+from fastapi.responses import FileResponse
 
 router = APIRouter()
 
@@ -218,10 +220,10 @@ async def delete_proposal(
     return None
 
 
-@router.post("/{proposal_id}/export")
+@router.get("/{proposal_id}/export")
 async def export_proposal(
     proposal_id: int,
-    format: str = "docx",  # docx, pdf
+    format: str = "docx",  # docx, pdf, xlsx
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
@@ -237,5 +239,33 @@ async def export_proposal(
     if proposal.status != ProposalStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="方案尚未生成完成")
 
-    # TODO: 实现文档导出功能
-    return {"message": "导出功能待实现", "format": format}
+    try:
+        if format == "docx":
+            filepath = export_service.export_proposal_to_word(proposal)
+            return FileResponse(
+                filepath,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                filename=f"{proposal.title}.docx"
+            )
+        elif format == "pdf":
+            filepath = export_service.export_proposal_to_pdf(proposal)
+            return FileResponse(
+                filepath,
+                media_type="application/pdf",
+                filename=f"{proposal.title}.pdf"
+            )
+        elif format == "xlsx":
+            filepath = export_service.export_pricing_to_excel(proposal)
+            return FileResponse(
+                filepath,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=f"{proposal.title}_报价单.xlsx"
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"不支持的导出格式: {format}")
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
