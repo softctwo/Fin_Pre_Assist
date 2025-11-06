@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:14
+    container_name: fin_pre_assist_db
+    environment:
+      POSTGRES_USER: finpre
+      POSTGRES_PASSWORD: finpre123
+      POSTGRES_DB: fin_pre_assist
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fin_pre_network
+
+  # Redis缓存
+  redis:
+    image: redis:7-alpine
+    container_name: fin_pre_assist_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - fin_pre_network
+
+  # 后端API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fin_pre_assist_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://finpre:finpre123@postgres:5432/fin_pre_assist
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./backend:/app
+      - ./backend/storage:/app/storage
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fin_pre_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # 前端
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fin_pre_assist_frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - fin_pre_network
+    command: npm run dev -- --host
+
+volumes:
+  postgres_data:
+
+networks:
+  fin_pre_network:
+    driver: bridge
