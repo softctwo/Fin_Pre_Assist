@@ -149,3 +149,63 @@ async def delete_template(
     db.commit()
 
     return None
+
+
+# 导入模板服务
+from app.services.template_service import template_service
+
+
+@router.post("/{template_id}/preview")
+async def preview_template(
+    template_id: int,
+    sample_data: dict,
+    db: Session = Depends(get_db)
+):
+    """预览模板渲染效果"""
+    template = db.query(Template).filter(Template.id == template_id).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="模板不存在")
+
+    try:
+        preview_content = template_service.preview_template(
+            template.content,
+            sample_data
+        )
+        return {"preview": preview_content}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"预览失败: {str(e)}"
+        )
+
+
+@router.get("/{template_id}/variables")
+async def get_template_variables(
+    template_id: int,
+    db: Session = Depends(get_db)
+):
+    """提取模板中的所有变量"""
+    template = db.query(Template).filter(Template.id == template_id).first()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="模板不存在")
+
+    variables = template_service.extract_variables(template.content)
+    default_vars = template_service.get_default_variables()
+
+    return {
+        "variables": variables,
+        "default_values": default_vars
+    }
+
+
+@router.post("/validate")
+async def validate_template_syntax(content: str):
+    """验证模板语法"""
+    is_valid, error_msg = template_service.validate_template(content)
+
+    if is_valid:
+        return {"valid": True, "message": "模板语法正确"}
+    else:
+        return {"valid": False, "error": error_msg}

@@ -6,6 +6,8 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.models import KnowledgeBase
+from app.services.vector_service import vector_service
+from loguru import logger
 
 router = APIRouter()
 
@@ -66,6 +68,23 @@ async def create_knowledge(
     db.add(db_knowledge)
     db.commit()
     db.refresh(db_knowledge)
+
+    # 向量化知识库条目
+    try:
+        vector_id = vector_service.add_knowledge(
+            knowledge_id=db_knowledge.id,
+            title=knowledge_data.title,
+            content=knowledge_data.content,
+            category=knowledge_data.category,
+            metadata=knowledge_data.metadata or {}
+        )
+        db_knowledge.vector_id = vector_id
+        db_knowledge.is_vectorized = 1
+        db.commit()
+        db.refresh(db_knowledge)
+        logger.info(f"知识库条目 {db_knowledge.id} 已向量化")
+    except Exception as e:
+        logger.error(f"知识库向量化失败: {e}")
 
     return db_knowledge
 
@@ -160,6 +179,13 @@ async def delete_knowledge(
 
     if not knowledge:
         raise HTTPException(status_code=404, detail="知识库条目不存在")
+
+    # 删除向量数据
+    if knowledge.vector_id:
+        try:
+            vector_service.delete_knowledge(knowledge.vector_id)
+        except Exception as e:
+            logger.error(f"删除知识库向量失败: {e}")
 
     # 软删除
     knowledge.is_active = 0
