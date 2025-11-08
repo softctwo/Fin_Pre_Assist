@@ -9,6 +9,7 @@ from app.models import Proposal, ProposalStatus, User
 from app.api.auth import get_current_active_user
 from app.services.proposal_generator import ProposalGenerator
 from app.services.export_service import export_service
+from app.services.cache_service import cache_service
 from fastapi.responses import FileResponse
 
 router = APIRouter()
@@ -76,6 +77,10 @@ async def create_proposal(
     db.add(db_proposal)
     db.commit()
     db.refresh(db_proposal)
+    
+    # ✅ 失效用户的方案列表缓存
+    await cache_service.invalidate_user_proposals(current_user.id)
+    logger.debug(f"📝 已失效用户 {current_user.id} 的方案列表缓存")
 
     return db_proposal
 
@@ -116,6 +121,10 @@ async def generate_proposal(
 
         db.commit()
         db.refresh(proposal)
+        
+        # ✅ 失效用户的方案列表缓存（方案生成完成）
+        await cache_service.invalidate_user_proposals(current_user.id)
+        logger.debug(f"📝 已失效用户 {current_user.id} 的方案列表缓存")
 
         return proposal
 
@@ -137,7 +146,25 @@ async def list_proposals(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
-    """获取方案列表"""
+    """获取方案列表 - 带缓存支持"""
+    
+    # ✅ 尝试从缓存获取
+    filters = {
+        "skip": skip,
+        "limit": limit,
+        "status": status_filter.value if status_filter else None
+    }
+    
+    cached_result = await cache_service.get_proposal_list(
+        user_id=current_user.id,
+        filters=filters
+    )
+    
+    if cached_result is not None:
+        logger.info(f"✅ 方案列表缓存命中，返回 {len(cached_result.get('items', []))} 条记录")
+        return cached_result
+    
+    # 缓存未命中，查询数据库
     query = db.query(Proposal).filter(Proposal.user_id == current_user.id)
 
     if status_filter:
@@ -145,8 +172,19 @@ async def list_proposals(
 
     total = query.count()
     items = query.order_by(Proposal.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = {"total": total, "items": items}
+    
+    # ✅ 缓存查询结果（5分钟）
+    await cache_service.cache_proposal_list(
+        user_id=current_user.id,
+        filters=filters,
+        proposals=result,
+        expire=300
+    )
+    logger.debug(f"📝 方案列表已缓存，用户 {current_user.id}")
 
-    return {"total": total, "items": items}
+    return result
 
 
 @router.get("/{proposal_id}", response_model=ProposalDetail)
@@ -195,6 +233,10 @@ async def update_proposal(
 
     db.commit()
     db.refresh(proposal)
+    
+    # ✅ 失效用户的方案列表缓存（方案更新）
+    await cache_service.invalidate_user_proposals(current_user.id)
+    logger.debug(f"📝 已失效用户 {current_user.id} 的方案列表缓存")
 
     return proposal
 
@@ -216,6 +258,10 @@ async def delete_proposal(
 
     db.delete(proposal)
     db.commit()
+    
+    # ✅ 失效用户的方案列表缓存（方案删除）
+    await cache_service.invalidate_user_proposals(current_user.id)
+    logger.debug(f"📝 已失效用户 {current_user.id} 的方案列表缓存")
 
     return None
 
