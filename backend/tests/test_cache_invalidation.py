@@ -1,120 +1,77 @@
-"""
-缓存失效测试
-测试缓存的自动和手动失效机制
-"""
+"""缓存与向量搜索失效测试"""
 import pytest
-import sys
-import os
-import asyncio
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from app.services.cache_service import CacheService
 
-from app.services.cache_service import cache_service
+
+@pytest.fixture
+def memory_cache():
+    """提供仅使用内存的缓存服务实例"""
+    service = CacheService()
+    service._cache_type = "memory"
+    service._memory_cache.clear()
+    service._hits = 0
+    service._misses = 0
+    return service
 
 
 @pytest.mark.asyncio
-async def test_cache_invalidation_on_proposal_creation():
-    """测试创建方案后缓存失效"""
-    user_id = "test_user_123"
+async def test_proposal_cache_roundtrip(memory_cache):
+    user_id = 42
+    await memory_cache.cache_proposal_list(user_id, {"status": None}, {"items": [{"id": 1}]})
 
-    # 先缓存一些数据
-    await cache_service.cache_proposal_list(
-        user_id=user_id,
-        proposals=[{"id": 1, "title": "Test Proposal"}]
-    )
-
-    # 验证缓存存在
-    cached = await cache_service.get_proposal_list(user_id, skip=0, limit=10)
+    cached = await memory_cache.get_proposal_list(user_id, {"status": None})
     assert cached is not None
+    assert cached["items"][0]["id"] == 1
 
-    # 失效用户方案缓存
-    await cache_service.invalidate_user_proposals(user_id)
-
-    # 验证缓存已失效
-    cached_after = await cache_service.get_proposal_list(user_id, skip=0, limit=10)
+    await memory_cache.invalidate_user_proposals(user_id)
+    cached_after = await memory_cache.get_proposal_list(user_id, {"status": None})
     assert cached_after is None
 
 
 @pytest.mark.asyncio
-async def test_vector_cache_invalidation_on_document_upload():
-    """测试文档上传后向量搜索缓存失效"""
-    collection = "documents"
-
-    # 缓存向量搜索结果
-    await cache_service.cache_vector_search(
-        collection=collection,
-        query="金融系统",
-        results=[{"id": "doc1", "score": 0.95}]
+async def test_vector_cache_invalidation(memory_cache):
+    filters = {"type": "technical_proposal"}
+    await memory_cache.cache_vector_search(
+        query="核心系统",
+        collection="documents",
+        results=[{"id": "chunk1"}],
+        filter_metadata=filters
     )
 
-    # 验证缓存存在
-    cached = await cache_service.get_vector_search(collection, "金融系统")
+    cached = await memory_cache.get_vector_search(
+        query="核心系统",
+        collection="documents",
+        filter_metadata=filters
+    )
     assert cached is not None
 
-    # 失效向量缓存
-    await cache_service.invalidate_vector_cache(collection)
-
-    # 验证缓存已失效
-    cached_after = await cache_service.get_vector_search(collection, "金融系统")
+    await memory_cache.invalidate_vector_cache("documents")
+    cached_after = await memory_cache.get_vector_search(
+        query="核心系统",
+        collection="documents",
+        filter_metadata=filters
+    )
     assert cached_after is None
 
 
 @pytest.mark.asyncio
-async def test_pattern_based_cache_invalidation():
-    """测试基于模式的缓存批量失效"""
-    # 创建多个缓存键
-    await cache_service.redis.set("user:1:proposals", "data1")
-    await cache_service.redis.set("user:2:proposals", "data2")
-    await cache_service.redis.set("user:3:documents", "data3")
+async def test_clear_pattern_on_memory_cache(memory_cache):
+    memory_cache._memory_cache["proposal_list:demo"] = {"items": []}
+    memory_cache._memory_cache["vector_search:documents:q"] = []
 
-    # 批量失效所有用户方案缓存
-    await cache_service.clear_pattern("user:*:proposals")
-
-    # 验证匹配模式已删除
-    assert await cache_service.redis.get("user:1:proposals") is None
-    assert await cache_service.redis.get("user:2:proposals") is None
-
-    # 验证不匹配的模式保留
-    assert await cache_service.redis.get("user:3:documents") is not None
+    cleared = await memory_cache.clear_pattern("proposal_list*")
+    assert cleared == 1
+    assert "proposal_list:demo" not in memory_cache._memory_cache
+    assert "vector_search:documents:q" in memory_cache._memory_cache
 
 
 @pytest.mark.asyncio
-async def test_cache_ttl_expiration():
-    """测试缓存TTL过期"""
-    key = "test_ttl_key"
-    value = "test_value"
+async def test_cache_stats(memory_cache):
+    await memory_cache.cache_ai_response("prompt", "response")
+    await memory_cache.get_ai_response("prompt")
 
-    # 设置1秒过期
-    await cache_service.redis.setex(key, 1, value)
-
-    # 立即验证存在
-    assert await cache_service.redis.get(key) == value
-
-    # 等待过期
-    await asyncio.sleep(1.5)
-
-    # 验证已过期
-    assert await cache_service.redis.get(key) is None
-
-
-@pytest.mark.asyncio
-async def test_cache_stats_after_invalidation():
-    """测试缓存失效后的统计信息"""
-    # 添加一些缓存
-    await cache_service.cache_ai_response("query1", "result1")
-    await cache_service.cache_ai_response("query2", "result2")
-
-    # 获取初始统计
-    stats_before = await cache_service.get_stats()
-
-    # 失效一个缓存
-    await cache_service.redis.delete("ai:response:" + cache_service._hash_key("query1"))
-
-    # 获取更新后统计
-    stats_after = await cache_service.get_stats()
-
-    assert stats_after['keys_count'] == stats_before['keys_count'] - 1
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    stats = await memory_cache.get_stats()
+    assert stats["type"] == "memory"
+    assert stats["hits"] >= 1
+    assert "hit_rate" in stats

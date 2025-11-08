@@ -2,11 +2,12 @@ from sqlalchemy import Column, Integer, String, DateTime, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
-from app.core.database import Base
+from app.models.base import Base
 
 
 class UserRole(str, enum.Enum):
     """用户角色枚举"""
+
     ADMIN = "admin"
     USER = "user"
     VIEWER = "viewer"
@@ -14,6 +15,7 @@ class UserRole(str, enum.Enum):
 
 class User(Base):
     """用户模型"""
+
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)

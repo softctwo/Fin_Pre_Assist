@@ -65,3 +65,30 @@ Thumbs.db
 
 # Docker
 .docker/
+
+# Generated artifacts
+backend/.coverage-history.json
+docs/openapi_diff.json
+
+# Coverage & report outputs (do not version control)
+htmlcov/
+frontend/coverage/
+backend/.coverage
+backend/test_reports/
+backend/COVERAGE_TEST_RESULT.md
+backend/TEST_COVERAGE_IMPROVEMENT_REPORT.md
+backend/PERFORMANCE_TESTING_REPORT.md
+backend/REAL_API_TEST_REPORT.md
+backend/INTEGRATION_TEST_REPORT.md
+backend/SYSTEM_TEST_REPORT.md
+backend/FINAL_TEST_SUMMARY.md
+backend/API_TESTING_EXPANSION_REPORT.md
+backend/DEPLOYMENT_TEST_LOG.txt
+backend/DEPLOYMENT_VALIDATION_REPORT.md
+backend/DEPLOYMENT_FINAL_REPORT.md
+backend/CODE_QUALITY_REPORT.md
+backend/WEBSOCKET_IMPLEMENTATION_REPORT.md
+FRONTEND_TEST_COVERAGE_COMPLETE.md
+COMPREHENSIVE_TEST_REPORT.md
+TEST_FIXES_COMPLETE.md
+FRONTEND_80PERCENT_COVERAGE_PLAN.md

@@ -1,3 +1,4 @@
+import React from "react";
 import api from './api'
 
 export interface Document {
@@ -13,7 +14,7 @@ export interface Document {
   created_at: string
 }
 
-export const documentService = {
+const documentService = {
   async upload(file: File, data: {
     title: string
     doc_type: string
@@ -51,4 +52,32 @@ export const documentService = {
   async delete(id: number) {
     await api.delete(`/documents/${id}`)
   },
+
+  async getDocuments(params?: { skip?: number; limit?: number; doc_type?: string; industry?: string }) {
+    return this.list(params)
+  },
+
+  async uploadDocument(file: File, data: any) {
+    return this.upload(file, data)
+  },
+
+  async getDocument(id: number) {
+    return this.get(id)
+  },
+
+  async deleteDocument(id: number) {
+    return this.delete(id)
+  },
+
+  async extractDocumentText(id: number) {
+    const response = await api.get(`/documents/${id}/extract`)
+    return response.data
+  },
+
+  async downloadDocument(id: number) {
+    const response = await api.get(`/documents/${id}/download`, { responseType: 'blob' })
+    return response.data
+  },
 }
+
+export default documentService

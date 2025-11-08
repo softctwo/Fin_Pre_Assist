@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.core.database import Base, get_db
+from app.core.database import get_db
+from app.models.base import Base
 from app.models import User, UserRole
 from app.api.auth import get_password_hash
 
@@ -43,7 +44,8 @@ def test_user(client):
         username="testuser",
         email="test@example.com",
         password_hash=get_password_hash("testpass123"),
-        role=UserRole.USER
+        role=UserRole.USER,
+        is_active=True
     )
     db.add(user)
     db.commit()

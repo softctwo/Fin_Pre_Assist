@@ -1,9 +1,10 @@
 """方案生成服务 - 增强版"""
+
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from loguru import logger
 
-from app.models import Proposal, Document
+from app.models import Proposal
 from app.services.ai_service import AIService
 from app.services.vector_service import vector_service
 
@@ -26,11 +27,7 @@ class ProposalGenerator:
         relevant_knowledge = self._search_relevant_knowledge(proposal)
 
         # 3. 构建增强上下文
-        context = self._build_enhanced_context(
-            proposal,
-            similar_docs,
-            relevant_knowledge
-        )
+        context = self._build_enhanced_context(proposal, similar_docs, relevant_knowledge)
 
         # 4. 生成各部分内容（并行生成以提高速度）
         logger.info("开始生成方案各部分内容...")
@@ -43,10 +40,7 @@ class ProposalGenerator:
 
         # 5. 生成完整内容
         full_content = self._combine_content(
-            executive_summary,
-            solution_overview,
-            technical_details,
-            implementation_plan
+            executive_summary, solution_overview, technical_details, implementation_plan
         )
 
         logger.info(f"方案生成完成: {proposal.title}")
@@ -66,7 +60,7 @@ class ProposalGenerator:
             results = vector_service.search_documents(
                 query=proposal.requirements,
                 n_results=3,
-                filter_metadata={"industry": proposal.customer_industry} if proposal.customer_industry else None
+                filter_metadata={"industry": proposal.customer_industry} if proposal.customer_industry else None,
             )
             logger.info(f"找到 {len(results)} 个相似文档")
             return results
@@ -77,10 +71,7 @@ class ProposalGenerator:
     def _search_relevant_knowledge(self, proposal: Proposal) -> List[Dict]:
         """搜索相关知识库内容"""
         try:
-            results = vector_service.search_knowledge(
-                query=proposal.requirements,
-                n_results=5
-            )
+            results = vector_service.search_knowledge(query=proposal.requirements, n_results=5)
             logger.info(f"找到 {len(results)} 个相关知识")
             return results
         except Exception as e:
@@ -88,10 +79,7 @@ class ProposalGenerator:
             return []
 
     def _build_enhanced_context(
-        self,
-        proposal: Proposal,
-        similar_docs: List[Dict],
-        relevant_knowledge: List[Dict]
+        self, proposal: Proposal, similar_docs: List[Dict], relevant_knowledge: List[Dict]
     ) -> str:
         """构建增强上下文信息"""
         context_parts = []
@@ -118,10 +106,10 @@ class ProposalGenerator:
             context_parts.append("【相似历史方案参考】")
             context_parts.append("=" * 50)
             for i, doc in enumerate(similar_docs, 1):
-                metadata = doc.get('metadata', {})
+                metadata = doc.get("metadata", {})
                 context_parts.append(f"\n参考方案 {i}:")
                 context_parts.append(f"标题: {metadata.get('title', 'N/A')}")
-                if metadata.get('customer_name'):
+                if metadata.get("customer_name"):
                     context_parts.append(f"客户: {metadata['customer_name']}")
                 context_parts.append(f"内容摘要:\n{doc.get('document', '')[:500]}")
 
@@ -131,7 +119,7 @@ class ProposalGenerator:
             context_parts.append("【相关产品和解决方案知识】")
             context_parts.append("=" * 50)
             for i, kb in enumerate(relevant_knowledge, 1):
-                metadata = kb.get('metadata', {})
+                metadata = kb.get("metadata", {})
                 context_parts.append(f"\n知识 {i}: {metadata.get('title', 'N/A')}")
                 context_parts.append(f"{kb.get('document', '')[:300]}")
 
@@ -342,12 +330,7 @@ JSON格式输出：
         parts = []
 
         # 添加标题和各部分
-        section_titles = [
-            "# 执行摘要\n",
-            "\n\n# 解决方案概述\n",
-            "\n\n# 技术实现方案\n",
-            "\n\n# 项目实施计划\n"
-        ]
+        section_titles = ["# 执行摘要\n", "\n\n# 解决方案概述\n", "\n\n# 技术实现方案\n", "\n\n# 项目实施计划\n"]
 
         for i, section in enumerate(sections[:4]):  # 只取前4个部分
             if section:

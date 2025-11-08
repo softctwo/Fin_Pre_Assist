@@ -2,21 +2,23 @@ from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
-from app.core.database import Base
+from app.models.base import Base
 
 
 class DocumentType(str, enum.Enum):
     """文档类型枚举"""
+
     TECHNICAL_PROPOSAL = "technical_proposal"  # 技术方案
-    BUSINESS_PROPOSAL = "business_proposal"    # 商务方案
-    QUOTATION = "quotation"                    # 报价单
-    BID_DOCUMENT = "bid_document"              # 投标文档
-    CASE_STUDY = "case_study"                  # 案例
-    OTHER = "other"                            # 其他
+    BUSINESS_PROPOSAL = "business_proposal"  # 商务方案
+    QUOTATION = "quotation"  # 报价单
+    BID_DOCUMENT = "bid_document"  # 投标文档
+    CASE_STUDY = "case_study"  # 案例
+    OTHER = "other"  # 其他
 
 
 class Document(Base):
     """文档模型"""
+
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -51,15 +53,15 @@ class Document(Base):
 
     # 关系
     user = relationship("User", back_populates="documents")
-    
+
     # 复合索引 - 优化常用查询
     __table_args__ = (
         # 用户的文档列表查询（按类型和时间排序）
-        Index('ix_document_user_type_created', 'user_id', 'type', 'created_at'),
+        Index("ix_document_user_type_created", "user_id", "type", "created_at"),
         # 客户名和行业组合查询
-        Index('ix_document_customer_industry', 'customer_name', 'industry'),
+        Index("ix_document_customer_industry", "customer_name", "industry"),
         # 向量化状态查询（用于批量处理）
-        Index('ix_document_vectorized_created', 'is_vectorized', 'created_at'),
+        Index("ix_document_vectorized_created", "is_vectorized", "created_at"),
     )
 
     def __repr__(self):

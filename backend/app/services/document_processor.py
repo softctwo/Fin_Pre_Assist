@@ -1,8 +1,8 @@
 """文档处理服务"""
+
 import os
-from typing import Optional
 import docx
-import PyPDF2
+from pypdf import PdfReader
 import openpyxl
 
 
@@ -27,8 +27,8 @@ class DocumentProcessor:
         """从PDF文档提取文本"""
         try:
             text = []
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
+            with open(file_path, "rb") as file:
+                pdf_reader = PdfReader(file)
                 for page in pdf_reader.pages:
                     page_text = page.extract_text()
                     if page_text:
@@ -57,16 +57,20 @@ class DocumentProcessor:
     @staticmethod
     def extract_text_from_txt(file_path: str) -> str:
         """从文本文件提取文本"""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                return file.read()
-        except UnicodeDecodeError:
-            # 尝试其他编码
+        # 尝试多种编码
+        encodings = ["utf-8", "gbk", "gb2312", "latin-1", "iso-8859-1"]
+
+        for encoding in encodings:
             try:
-                with open(file_path, 'r', encoding='gbk') as file:
+                with open(file_path, "r", encoding=encoding) as file:
                     return file.read()
-            except Exception as e:
-                raise Exception(f"读取文本文件失败: {str(e)}")
+            except (UnicodeDecodeError, LookupError):
+                continue
+
+        # 如果所有编码都失败，尝试二进制模式并忽略错误
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as file:
+                return file.read()
         except Exception as e:
             raise Exception(f"读取文本文件失败: {str(e)}")
 
@@ -78,13 +82,13 @@ class DocumentProcessor:
 
         file_ext = os.path.splitext(file_path)[1].lower()
 
-        if file_ext in ['.doc', '.docx']:
+        if file_ext in [".doc", ".docx"]:
             return cls.extract_text_from_docx(file_path)
-        elif file_ext == '.pdf':
+        elif file_ext == ".pdf":
             return cls.extract_text_from_pdf(file_path)
-        elif file_ext in ['.xls', '.xlsx']:
+        elif file_ext in [".xls", ".xlsx"]:
             return cls.extract_text_from_xlsx(file_path)
-        elif file_ext == '.txt':
+        elif file_ext == ".txt":
             return cls.extract_text_from_txt(file_path)
         else:
             raise ValueError(f"不支持的文件类型: {file_ext}")

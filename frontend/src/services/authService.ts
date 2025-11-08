@@ -1,3 +1,4 @@
+import React from "react";
 import api from './api'
 
 export interface LoginData {
@@ -12,7 +13,7 @@ export interface RegisterData {
   full_name?: string
 }
 
-export const authService = {
+const authService = {
   async login(data: LoginData) {
     const formData = new FormData()
     formData.append('username', data.username)
@@ -31,3 +32,5 @@ export const authService = {
     return response.data
   },
 }
+
+export default authService

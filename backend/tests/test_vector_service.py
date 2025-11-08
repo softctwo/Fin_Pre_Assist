@@ -1,5 +1,7 @@
 """向量服务测试"""
 import pytest
+from unittest.mock import MagicMock, patch
+
 from app.services.vector_service import VectorService
 
 
@@ -85,7 +87,7 @@ class TestVectorService:
             content="这个文档将被删除",
             metadata={}
         )
-        result = vector_service.delete_document(vector_id)
+        result = vector_service.delete_document(vector_id, doc_id=999)
         assert result is True
 
     def test_collection_stats(self, vector_service):
@@ -95,3 +97,31 @@ class TestVectorService:
         assert "knowledge" in stats
         assert "proposals" in stats
         assert isinstance(stats["documents"], int)
+
+    def test_delete_document_uses_doc_id(self):
+        """测试删除文档优先使用doc_id"""
+        service = VectorService()
+        service.documents_collection = MagicMock()
+
+        deleted = service.delete_document("doc_99_abcd", doc_id=99)
+
+        assert deleted is True
+        service.documents_collection.delete.assert_called_once_with(where={"doc_id": 99})
+
+    def test_search_similar_proposals_filters_types(self, vector_service):
+        """测试相似方案搜索的过滤条件"""
+        with patch.object(
+            vector_service,
+            "search_documents",
+            return_value=[{"id": "chunk"}]
+        ) as mock_search:
+            results = vector_service.search_similar_proposals("测试需求", n_results=2)
+
+        assert results == [{"id": "chunk"}]
+        called_kwargs = mock_search.call_args.kwargs
+        assert "filter_metadata" in called_kwargs
+        assert set(called_kwargs["filter_metadata"]["type"]["$in"]) >= {
+            "technical_proposal",
+            "business_proposal",
+            "bid_document",
+        }

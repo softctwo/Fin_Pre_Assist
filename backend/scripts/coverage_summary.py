@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -111,6 +112,7 @@ def write_step_summary(
     backend_pct: float | None,
     frontend_pct: float | None,
     total_pct: float | None,
+    history_lines: list[str] | None = None,
 ) -> None:
     summary_path = os.getenv("GITHUB_STEP_SUMMARY")
     if not summary_path:
@@ -128,6 +130,10 @@ def write_step_summary(
         lines.append("- Total: N/A")
     else:
         lines.append(f"- Total: {total_pct:.2f}%")
+    if history_lines:
+        lines.append("")
+        lines.append("### History Comparison")
+        lines.extend(history_lines)
     Path(summary_path).write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -157,6 +163,12 @@ def main() -> int:
         default="frontend/coverage/coverage-final.json",
     )
     parser.add_argument("--badge", type=str, default="")
+    parser.add_argument(
+        "--history",
+        type=str,
+        default="",
+        help="Path to history JSON used for comparison and persistence.",
+    )
     args = parser.parse_args()
 
     backend_path = Path(args.backend)
@@ -185,7 +197,19 @@ def main() -> int:
         os.environ["TOTAL_COVERAGE"] = str(total_pct)
 
     # Write summary markdown when possible
-    write_step_summary(backend_pct, frontend_pct, total_pct)
+    history_path = Path(args.history) if args.history else None
+    history_lines: list[str] | None = None
+    if history_path:
+        previous_entries = load_history(history_path)
+        if previous_entries:
+            history_lines = format_history_diff(
+                previous_entries[-1],
+                backend_pct,
+                frontend_pct,
+                total_pct,
+            )
+
+    write_step_summary(backend_pct, frontend_pct, total_pct, history_lines)
 
     # Generate badge if requested (fallback to backend only)
     badge_value = total_pct or backend_pct or 0.0
@@ -194,9 +218,68 @@ def main() -> int:
         svg_content = generate_badge_svg(badge_value)
         badge_path.write_text(svg_content, encoding="utf-8")
 
+    if history_path:
+        append_history(history_path, backend_pct, frontend_pct, total_pct)
+
     # Always succeed; this script should not fail the build
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+def load_history(path: Path) -> list[dict]:
+    if not path or not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text())
+        if isinstance(data, list):
+            return data
+    except Exception:
+        return []
+    return []
+
+
+def format_history_diff(
+    previous: dict,
+    backend_pct: float | None,
+    frontend_pct: float | None,
+    total_pct: float | None,
+) -> list[str]:
+    lines: list[str] = []
+
+    def _append(label: str, current: float | None, key: str) -> None:
+        prev_val = previous.get(key)
+        if current is None or prev_val is None:
+            return
+        delta = round(current - float(prev_val), 2)
+        if abs(delta) < 0.01:
+            return
+        lines.append(f"- {label}: {prev_val:.2f}% → {current:.2f}% ({delta:+.2f}%)")
+
+    _append("Backend", backend_pct, "backend")
+    _append("Frontend", frontend_pct, "frontend")
+    _append("Total", total_pct, "total")
+    return lines
+
+
+def append_history(
+    path: Path,
+    backend_pct: float | None,
+    frontend_pct: float | None,
+    total_pct: float | None,
+    max_entries: int = 20,
+) -> None:
+    if path is None:
+        return
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "backend": backend_pct,
+        "frontend": frontend_pct,
+        "total": total_pct,
+    }
+    history = load_history(path)
+    history.append(entry)
+    if len(history) > max_entries:
+        history = history[-max_entries:]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(history, indent=2), encoding="utf-8")

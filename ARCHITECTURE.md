@@ -48,7 +48,7 @@
 - AI框架: LangChain
 - 文档处理:
   - python-docx (Word)
-  - PyPDF2/pdfplumber (PDF)
+  - pypdf/pdfplumber (PDF)
   - openpyxl (Excel)
 - 认证: JWT
 ```

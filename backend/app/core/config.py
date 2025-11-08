@@ -1,10 +1,12 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
 
 class Settings(BaseSettings):
     """应用配置"""
+
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="allow")
 
     # 应用基础配置
     APP_NAME: str = "金融售前方案辅助系统"
@@ -39,11 +41,15 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-3.5-turbo"
 
     TONGYI_API_KEY: str = ""
+    TONGYI_MODEL: str = "qwen-plus"
 
     WENXIN_API_KEY: str = ""
     WENXIN_SECRET_KEY: str = ""
-    
+    WENXIN_MODEL: str = "ernie-bot-turbo"
+
     ZHIPU_API_KEY: str = ""  # 智谱AI API密钥
+    ZHIPU_MODEL: str = "glm-4"
+    ZHIPU_EMBEDDING_MODEL: str = "embedding-2"
 
     AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/local
 
@@ -58,11 +64,6 @@ class Settings(BaseSettings):
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "./logs/app.log"
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "allow"  # 允许额外字段
 
 
 # 创建配置实例

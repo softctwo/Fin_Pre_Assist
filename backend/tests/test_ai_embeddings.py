@@ -1,8 +1,14 @@
 """AI向量化功能单元测试"""
+import os
 import pytest
 import asyncio
 from unittest.mock import Mock, patch, AsyncMock
 from app.services.ai_service import AIService
+
+pytestmark = pytest.mark.skipif(
+    os.getenv("ENABLE_AI_EMBED_TESTS") != "1",
+    reason="AI embedding live tests disabled (set ENABLE_AI_EMBED_TESTS=1 to run)",
+)
 
 
 class TestAIEmbeddings:

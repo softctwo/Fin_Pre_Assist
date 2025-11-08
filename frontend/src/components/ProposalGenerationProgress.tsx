@@ -1,3 +1,4 @@
+import React from "react";
 import { Modal, Progress, Alert, Typography } from 'antd'
 import { useEffect, useState, useRef } from 'react'
 import { useAuthStore } from '../store/authStore'
@@ -7,7 +8,7 @@ const { Text } = Typography
 interface ProposalGenerationProgressProps {
   visible: boolean
   proposalId: number
-  onComplete: (success: boolean, data?: any) => void
+  onComplete: () => void
   onCancel: () => void
 }
 
@@ -53,12 +54,14 @@ const ProposalGenerationProgress: React.FC<ProposalGenerationProgressProps> = ({
     const port = import.meta.env.DEV ? '8000' : window.location.port
     const wsUrl = `${protocol}//${host}:${port}/api/v1/ws/${user.id}`
     
+    // eslint-disable-next-line no-console
     console.log('建立WebSocket连接:', wsUrl)
     
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
     
     ws.onopen = () => {
+      // eslint-disable-next-line no-console
       console.log('WebSocket连接已建立')
       setStage('connected')
       setMessage('连接成功,等待生成...')
@@ -67,6 +70,7 @@ const ProposalGenerationProgress: React.FC<ProposalGenerationProgressProps> = ({
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
+        // eslint-disable-next-line no-console
         console.log('收到WebSocket消息:', data)
         
         // 处理方案生成进度消息(对应send_proposal_progress推送格式)
@@ -82,7 +86,7 @@ const ProposalGenerationProgress: React.FC<ProposalGenerationProgressProps> = ({
             setMessage('方案生成完成!')
             setTimeout(() => {
               ws.close()
-              onComplete(true, { id: proposalId })
+              onComplete()
             }, 1500)
           }
           
@@ -98,20 +102,24 @@ const ProposalGenerationProgress: React.FC<ProposalGenerationProgressProps> = ({
         
         // 处理连接消息
         if (data.type === 'connection') {
+          // eslint-disable-next-line no-console
           console.log('WebSocket连接确认:', data.message)
         }
       } catch (err) {
+        // eslint-disable-next-line no-console
         console.error('解析WebSocket消息失败:', err)
       }
     }
     
-    ws.onerror = (error) => {
-      console.error('WebSocket错误:', error)
+    ws.onerror = () => {
+      // eslint-disable-next-line no-console
+      console.error('WebSocket错误')
       setError('连接失败,请稍后重试')
       setStage('error')
     }
     
     ws.onclose = () => {
+      // eslint-disable-next-line no-console
       console.log('WebSocket连接已关闭')
     }
     

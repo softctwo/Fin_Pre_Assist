@@ -1,3 +1,4 @@
+import React from "react";
 import api from './api'
 
 export interface Proposal {
@@ -24,7 +25,7 @@ export interface ProposalCreate {
   reference_document_ids?: number[]
 }
 
-export const proposalService = {
+const proposalService = {
   async create(data: ProposalCreate) {
     const response = await api.post('/proposals/', data)
     return response.data
@@ -64,4 +65,34 @@ export const proposalService = {
     })
     return response.data
   },
+
+  async getProposals(params?: any) {
+    return this.list(params)
+  },
+
+  async createProposal(data: ProposalCreate) {
+    return this.create(data)
+  },
+
+  async getProposal(id: number) {
+    return this.get(id)
+  },
+
+  async updateProposal(id: number, data: any) {
+    return this.update(id, data)
+  },
+
+  async deleteProposal(id: number) {
+    return this.delete(id)
+  },
+
+  async exportProposal(id: number, format: string) {
+    return this.export(id, format)
+  },
+
+  async generateProposal(id: number) {
+    return this.generate(id)
+  },
 }
+
+export default proposalService

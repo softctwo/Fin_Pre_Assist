@@ -1,10 +1,11 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON
 from datetime import datetime
-from app.core.database import Base
+from app.models.base import Base
 
 
 class KnowledgeBase(Base):
     """知识库模型"""
+
     __tablename__ = "knowledge_base"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models import Template, TemplateType
+from app.models import Template, TemplateType, User
+from app.api.auth import get_current_active_user
+from app.services.template_service import template_service
 
 router = APIRouter()
+
 
 # Pydantic模型
 class TemplateCreate(BaseModel):
@@ -34,8 +37,7 @@ class TemplateResponse(BaseModel):
     is_active: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TemplateDetail(TemplateResponse):
@@ -51,7 +53,8 @@ class TemplateList(BaseModel):
 @router.post("/", response_model=TemplateResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(
     template_data: TemplateCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """创建模板"""
     db_template = Template(
@@ -59,7 +62,7 @@ async def create_template(
         type=template_data.type,
         description=template_data.description,
         content=template_data.content,
-        variables=template_data.variables
+        variables=template_data.variables,
     )
 
     db.add(db_template)
@@ -74,7 +77,8 @@ async def list_templates(
     skip: int = 0,
     limit: int = 50,
     template_type: Optional[TemplateType] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """获取模板列表"""
     query = db.query(Template).filter(Template.is_active == 1)
@@ -91,13 +95,11 @@ async def list_templates(
 @router.get("/{template_id}", response_model=TemplateDetail)
 async def get_template(
     template_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """获取模板详情"""
-    template = db.query(Template).filter(
-        Template.id == template_id,
-        Template.is_active == 1
-    ).first()
+    template = db.query(Template).filter(Template.id == template_id, Template.is_active == 1).first()
 
     if not template:
         raise HTTPException(status_code=404, detail="模板不存在")
@@ -109,7 +111,8 @@ async def get_template(
 async def update_template(
     template_id: int,
     template_data: TemplateUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """更新模板"""
     template = db.query(Template).filter(Template.id == template_id).first()
@@ -136,7 +139,8 @@ async def update_template(
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(
     template_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """删除模板（软删除）"""
     template = db.query(Template).filter(Template.id == template_id).first()
@@ -151,15 +155,12 @@ async def delete_template(
     return None
 
 
-# 导入模板服务
-from app.services.template_service import template_service
-
-
 @router.post("/{template_id}/preview")
 async def preview_template(
     template_id: int,
     sample_data: dict,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """预览模板渲染效果"""
     template = db.query(Template).filter(Template.id == template_id).first()
@@ -168,22 +169,17 @@ async def preview_template(
         raise HTTPException(status_code=404, detail="模板不存在")
 
     try:
-        preview_content = template_service.preview_template(
-            template.content,
-            sample_data
-        )
+        preview_content = template_service.preview_template(template.content, sample_data)
         return {"preview": preview_content}
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"预览失败: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"预览失败: {str(e)}")
 
 
 @router.get("/{template_id}/variables")
 async def get_template_variables(
     template_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_active_user),
 ):
     """提取模板中的所有变量"""
     template = db.query(Template).filter(Template.id == template_id).first()
@@ -194,16 +190,22 @@ async def get_template_variables(
     variables = template_service.extract_variables(template.content)
     default_vars = template_service.get_default_variables()
 
-    return {
-        "variables": variables,
-        "default_values": default_vars
-    }
+    return {"variables": variables, "default_values": default_vars}
+
+
+class TemplateValidationRequest(BaseModel):
+    content: str
 
 
 @router.post("/validate")
-async def validate_template_syntax(content: str):
+async def validate_template_syntax(
+    request: TemplateValidationRequest,
+    _current_user: User = Depends(get_current_active_user),
+):
     """验证模板语法"""
-    is_valid, error_msg = template_service.validate_template(content)
+    from app.services.template_service import template_service
+
+    is_valid, error_msg = template_service.validate_template(request.content)
 
     if is_valid:
         return {"valid": True, "message": "模板语法正确"}

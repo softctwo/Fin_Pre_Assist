@@ -1,3 +1,4 @@
+import React from "react";
 import api from './api'
 
 export interface Template {
@@ -12,7 +13,7 @@ export interface Template {
   created_at: string
 }
 
-export const templateService = {
+const templateService = {
   async create(data: {
     name: string
     type: string
@@ -66,4 +67,34 @@ export const templateService = {
     const response = await api.post('/templates/validate', { content })
     return response.data
   },
+
+  async getTemplates(params?: any) {
+    return this.list(params)
+  },
+
+  async createTemplate(data: any) {
+    return this.create(data)
+  },
+
+  async validateTemplate(content: string) {
+    return this.validateSyntax(content)
+  },
+
+  async getTemplate(id: number) {
+    return this.get(id)
+  },
+
+  async updateTemplate(id: number, data: any) {
+    return this.update(id, data)
+  },
+
+  async deleteTemplate(id: number) {
+    return this.delete(id)
+  },
+
+  async previewTemplate(id: number, sampleData: any) {
+    return this.preview(id, sampleData)
+  },
 }
+
+export default templateService

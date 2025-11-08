@@ -1,3 +1,4 @@
+import React from "react";
 import api from './api'
 
 export interface SearchResult {
@@ -7,7 +8,7 @@ export interface SearchResult {
   relevance_score: number
 }
 
-export const searchService = {
+const searchService = {
   async searchDocuments(params: {
     query: string
     limit?: number
@@ -39,4 +40,15 @@ export const searchService = {
     const response = await api.get('/search/stats')
     return response.data
   },
+
+  async searchProposals(params: any) {
+    return this.searchSimilarProposals(params)
+  },
+
+  async getSearchSuggestions(query: string) {
+    const response = await api.get('/search/suggestions', { params: { query } })
+    return response.data
+  },
 }
+
+export default searchService
