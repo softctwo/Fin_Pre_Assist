@@ -42,8 +42,10 @@ class Settings(BaseSettings):
 
     WENXIN_API_KEY: str = ""
     WENXIN_SECRET_KEY: str = ""
+    
+    ZHIPU_API_KEY: str = ""  # 智谱AI API密钥
 
-    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/local
+    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/local
 
     # 文件存储配置
     UPLOAD_DIR: str = "./storage/documents"
@@ -60,6 +62,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "allow"  # 允许额外字段
 
 
 # 创建配置实例

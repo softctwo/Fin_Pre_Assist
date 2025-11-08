@@ -3,6 +3,7 @@ import { Card, Descriptions, Button, Space, Tag, message, Spin } from 'antd'
 import { useParams, useNavigate } from 'react-router-dom'
 import { proposalService, type Proposal } from '../services/proposalService'
 import { ThunderboltOutlined, DownloadOutlined } from '@ant-design/icons'
+import ProposalGenerationProgress from '../components/ProposalGenerationProgress'
 
 const ProposalDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -10,6 +11,7 @@ const ProposalDetail = () => {
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [showProgress, setShowProgress] = useState(false)
 
   useEffect(() => {
     if (id) {
@@ -32,16 +34,39 @@ const ProposalDetail = () => {
   const handleGenerate = async () => {
     if (!proposal) return
 
+    // 显示进度弹窗并启动生成
+    setShowProgress(true)
     setGenerating(true)
+    
     try {
-      const data = await proposalService.generate(proposal.id)
-      setProposal(data)
-      message.success('方案生成成功')
+      // 后台开始生成,WebSocket会推送进度
+      await proposalService.generate(proposal.id)
+      // 注意:生成完成后由进度组件的onComplete处理
     } catch (error) {
-      console.error('生成失败:', error)
-    } finally {
+      console.error('启动生成失败:', error)
+      setShowProgress(false)
       setGenerating(false)
+      message.error('启动生成失败,请稍后重试')
     }
+  }
+  
+  const handleGenerateComplete = (success: boolean) => {
+    setShowProgress(false)
+    setGenerating(false)
+    
+    if (success) {
+      message.success('方案生成成功!')
+      // 重新加载方案数据
+      if (proposal) {
+        loadProposal(proposal.id)
+      }
+    }
+  }
+  
+  const handleGenerateCancel = () => {
+    setShowProgress(false)
+    setGenerating(false)
+    message.info('已取消生成')
   }
 
   const handleExport = async (format: string) => {
@@ -145,6 +170,16 @@ const ProposalDetail = () => {
         <Card title="实施计划">
           <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.implementation_plan}</p>
         </Card>
+      )}
+      
+      {/* 进度弹窗 */}
+      {proposal && (
+        <ProposalGenerationProgress
+          visible={showProgress}
+          proposalId={proposal.id}
+          onComplete={handleGenerateComplete}
+          onCancel={handleGenerateCancel}
+        />
       )}
     </div>
   )

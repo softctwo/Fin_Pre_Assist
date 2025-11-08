@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum, JSON, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -19,11 +19,11 @@ class Proposal(Base):
     __tablename__ = "proposals"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
+    title = Column(String(200), nullable=False, index=True)  # 添加索引支持标题搜索
 
     # 客户信息
-    customer_name = Column(String(200), nullable=False)
-    customer_industry = Column(String(100))
+    customer_name = Column(String(200), nullable=False, index=True)  # 添加索引支持客户名搜索
+    customer_industry = Column(String(100), index=True)  # 添加索引支持行业筛选
     customer_contact = Column(String(100))
 
     # 需求信息
@@ -44,10 +44,10 @@ class Proposal(Base):
     reference_documents = Column(JSON)  # 参考的历史文档ID列表
 
     # 状态
-    status = Column(Enum(ProposalStatus), default=ProposalStatus.DRAFT)
+    status = Column(Enum(ProposalStatus), default=ProposalStatus.DRAFT, index=True)  # 添加索引支持状态筛选
 
     # 元数据
-    metadata = Column(JSON)
+    proposal_metadata = Column(JSON)
 
     # 关联
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -58,6 +58,16 @@ class Proposal(Base):
 
     # 关系
     user = relationship("User", back_populates="proposals")
+    
+    # 复合索引 - 优化常用查询
+    __table_args__ = (
+        # 用户的方案列表查询（按状态和时间排序）
+        Index('ix_proposal_user_status_created', 'user_id', 'status', 'created_at'),
+        # 客户名和状态组合查询
+        Index('ix_proposal_customer_status', 'customer_name', 'status'),
+        # 行业和时间组合查询（用于趋势分析）
+        Index('ix_proposal_industry_created', 'customer_industry', 'created_at'),
+    )
 
     def __repr__(self):
         return f"<Proposal {self.title}>"

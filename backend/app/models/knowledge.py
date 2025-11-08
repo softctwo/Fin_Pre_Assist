@@ -16,7 +16,7 @@ class KnowledgeBase(Base):
     tags = Column(JSON)  # 标签列表
 
     # 元数据
-    metadata = Column(JSON)
+    kb_metadata = Column(JSON)
 
     # 向量化
     is_vectorized = Column(Integer, default=0)
