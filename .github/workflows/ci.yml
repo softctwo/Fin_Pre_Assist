@@ -40,6 +40,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -61,6 +63,13 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install pytest pytest-cov pytest-html bandit safety black flake8
+
+    - name: Check Alembic model signature
+      id: model_check
+      continue-on-error: true
+      working-directory: ./backend
+      run: |
+        python scripts/check_model_signature.py
 
     - name: Lint with flake8
       working-directory: ./backend
@@ -88,7 +97,8 @@ jobs:
     - name: Run tests with coverage
       working-directory: ./backend
       env:
-        DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+        # 使用SQLite进行测试，避免对Postgres服务的强依赖
+        DATABASE_URL: sqlite:///./test.db
         REDIS_HOST: localhost
         REDIS_PORT: 6379
         SECRET_KEY: test-secret-key-min-32-chars-long-here
@@ -96,8 +106,37 @@ jobs:
         TONGYI_API_KEY: test-key
         WENXIN_API_KEY: test-key
         OPENAI_API_KEY: test-key
+        CHROMA_PERSIST_DIRECTORY: ./storage/chroma
       run: |
         pytest tests/ -v --cov=app --cov-report=term --cov-report=html --cov-report=xml --cov-fail-under=55 --html=pytest-report.html
+
+    - name: Frontend unit tests (Vitest) with coverage
+      working-directory: ./frontend
+      run: |
+        npm run test:coverage -- --run
+
+    - name: Type check with mypy
+      working-directory: ./backend
+      run: |
+        mypy app/ --ignore-missing-imports
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install frontend dependencies
+      working-directory: ./frontend
+      run: |
+        npm ci || npm install
+
+    - name: Lint frontend
+      working-directory: ./frontend
+      run: npm run lint
+
+    - name: Build frontend
+      working-directory: ./frontend
+      run: npm run build
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v3
@@ -110,23 +149,68 @@ jobs:
           backend/pytest-report.html
           backend/bandit-report.json
           backend/safety-report.json
+          frontend/coverage/
+
+    - name: Summarize coverage and generate badge
+      id: coverage_summary
+      env:
+        GITHUB_STEP_SUMMARY: ${{ env.GITHUB_STEP_SUMMARY }}
+      run: |
+        python backend/scripts/coverage_summary.py --backend backend/coverage.xml --frontend frontend/coverage/coverage-final.json --badge docs/coverage-badge.svg
 
     - name: Comment PR with coverage
       if: github.event_name == 'pull_request' && matrix.python-version == '3.9'
       uses: actions/github-script@v6
       with:
         script: |
-          const fs = require('fs');
-          const path = 'backend/coverage.xml';
-          if (fs.existsSync(path)) {
-            // Simple coverage comment
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '✅ CI Pipeline completed! Coverage report uploaded.'
-            });
-          }
+          const bk = '${{ steps.coverage_summary.outputs.backend }}';
+          const fe = '${{ steps.coverage_summary.outputs.frontend }}';
+          const total = '${{ steps.coverage_summary.outputs.total }}';
+          let body = `✅ CI 完成\n\n` +
+            `后端覆盖率: ${bk || 'N/A'}%\n` +
+            `前端覆盖率: ${fe || 'N/A'}%\n` +
+            `综合覆盖率: ${total || 'N/A'}%`;
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body
+          });
+
+    - name: Comment PR about Alembic migration needed
+      if: github.event_name == 'pull_request' && steps.model_check.outcome == 'failure' && matrix.python-version == '3.9'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const body = [
+            '⚠️ 检测到 SQLAlchemy 模型与快照不一致。',
+            '请运行: `alembic revision --autogenerate -m "update models"` 并更新 `backend/alembic/model_signature.json`。'
+          ].join('\n');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body
+          });
+
+    - name: Commit coverage badge to repo (main branch)
+      if: github.ref == 'refs/heads/main' && matrix.python-version == '3.9'
+      run: |
+        git config user.name "github-actions"
+        git config user.email "github-actions@github.com"
+        git add docs/coverage-badge.svg
+        if ! git diff --cached --quiet; then
+          git commit -m "chore(ci): update coverage badge"
+          git push origin HEAD:${GITHUB_REF#refs/heads/}
+        else
+          echo "No badge changes to commit."
+        fi
+
+    - name: Fail build if model signature changed (requires Alembic migration)
+      if: steps.model_check.outcome == 'failure'
+      run: |
+        echo "Model signature mismatch detected. Please generate Alembic migration and update snapshot." >&2
+        exit 1
 
   security-scan:
     runs-on: ubuntu-latest
