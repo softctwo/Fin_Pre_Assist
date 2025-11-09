@@ -107,3 +107,20 @@ backend/file:test_*
 
 # Local cloud config
 cloudbaserc.json
+
+# Alembic stray version file (do not commit lock/state files)
+backend/alembic/versions/alembic_version
+
+# Security scan local outputs
+backend/security_*.json
+
+# Virtual envs
+venv/
+venv*/
+**/venv*/
+ENV/
+\.venv/
+
+# Local scratch/test files
+test.txt
+test_upload.html
