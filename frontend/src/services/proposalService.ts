@@ -1,4 +1,3 @@
-import React from "react";
 import api from './api'
 
 export interface Proposal {
@@ -25,24 +24,35 @@ export interface ProposalCreate {
   reference_document_ids?: number[]
 }
 
-const proposalService = {
+export const proposalService = {
   async create(data: ProposalCreate) {
     const response = await api.post('/proposals/', data)
     return response.data
   },
 
-  async list(params?: {
-    skip?: number
-    limit?: number
-    status_filter?: string
-  }) {
-    const response = await api.get('/proposals/', { params })
+  async list(params: { skip?: number; limit?: number; status_filter?: string } | { page?: number; limit?: number; status?: string; industry?: string } = {}) {
+    const queryParams: Record<string, any> = {}
+    if ('page' in params) {
+      queryParams.page = params.page ?? 1
+      queryParams.limit = params.limit ?? 10
+      if (params.status) queryParams.status = params.status
+      if ('industry' in params && params.industry) queryParams.industry = params.industry
+    } else {
+      queryParams.skip = params.skip ?? 0
+      queryParams.limit = params.limit ?? 20
+      if (params.status_filter) queryParams.status_filter = params.status_filter
+    }
+    const response = await api.get('/proposals/', { params: queryParams })
     return response.data
   },
 
   async get(id: number) {
     const response = await api.get(`/proposals/${id}`)
     return response.data
+  },
+
+  async getById(id: number) {
+    return this.get(id)
   },
 
   async update(id: number, data: ProposalCreate) {
@@ -56,6 +66,23 @@ const proposalService = {
 
   async generate(id: number) {
     const response = await api.post(`/proposals/${id}/generate`)
+    return response.data
+  },
+
+  async copy(id: number, payload: any) {
+    const response = await api.post(`/proposals/${id}/copy`, payload)
+    return response.data
+  },
+
+  async search(keyword: string, filters?: any) {
+    const response = await api.get('/proposals/search', {
+      params: { q: keyword, ...filters },
+    })
+    return response.data
+  },
+
+  async validateRequirements(requirements: string) {
+    const response = await api.post('/proposals/validate', { requirements })
     return response.data
   },
 

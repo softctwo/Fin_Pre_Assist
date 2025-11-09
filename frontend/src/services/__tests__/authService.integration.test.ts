@@ -1,123 +1,54 @@
-import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
-import { ConfigProvider, Button, Form, Input, Modal } from 'antd'
-import { create } from 'zustand'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import authService from '../authService'
+import api from '../api'
 
-// Mock auth service
-vi.mock('../../services/authService', () => ({
+vi.mock('../api', () => ({
   default: {
-    login: vi.fn(),
-    register: vi.fn(),
-    getCurrentUser: vi.fn(),
-  }
+    post: vi.fn(),
+    get: vi.fn(),
+  },
 }))
 
-// Mock components
-const mockNavigate = vi.fn()
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => mockNavigate,
-  useLocation: () => ({ pathname: '/login' }),
-}))
+const mockedApi = api as unknown as {
+  post: ReturnType<typeof vi.fn>
+  get: ReturnType<typeof vi.fn>
+}
 
-vi.mock('antd', () => ({
-  ConfigProvider: ({ children }: any) => <div>{children}</div>,
-  Form: { Item: ({ children }: any) => <div>{children}</div> },
-  Input: (props: any) => <input {...props} />,
-  Button: (props: any) => <button {...props} />,
-  Modal: ({ children }: any) => <div>{children}</div>,
-}))
-
-const mockAuthService = vi.mocked(await import('../../services/authService'))
-
-describe('Auth Service Tests', () => {
+describe('authService', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    mockedApi.post.mockReset()
+    mockedApi.get.mockReset()
   })
 
-  describe('Service Methods', () => {
-    it('should import authService', () => {
-      const authService = require('../../services/authService').default
-      expect(authService).toBeDefined()
-      expect(typeof authService.login).toBe('function')
-      expect(typeof authService.register).toBe('function')
-      expect(typeof authService.getCurrentUser).toBe('function')
-    })
+  it('sends login form data to /auth/login', async () => {
+    mockedApi.post.mockResolvedValue({ data: { access_token: 'token', token_type: 'bearer' } })
 
-    it('should handle successful login', async () => {
-      const mockResponse = {
-        access_token: 'test-token',
-        token_type: 'bearer',
-        user: { id: 1, username: 'testuser', role: 'user' }
-      }
-      
-      mockAuthService.login.mockResolvedValue(mockResponse)
+    const result = await authService.login({ username: 'user', password: 'pass' })
 
-      const authService = require('../../services/authService').default
-      const result = await authService.login('testuser', 'password123')
-
-      expect(mockAuthService.login).toHaveBeenCalledWith('testuser', 'password123')
-      expect(result).toEqual(mockResponse)
-    })
-
-    it('should handle login failure', async () => {
-      const mockError = new Error('Invalid credentials')
-      mockAuthService.login.mockRejectedValue(mockError)
-
-      const authService = require('../../services/authService').default
-      await expect(authService.login('wrong', 'credentials')).rejects.toThrow()
-    })
-
-    it('should handle successful registration', async () => {
-      const mockResponse = {
-        id: 1,
-        username: 'newuser',
-        email: 'new@example.com',
-        role: 'user'
-      }
-      
-      mockAuthService.register.mockResolvedValue(mockResponse)
-
-      const authService = require('../../services/authService').default
-      const result = await authService.register('newuser', 'new@example.com', 'password123')
-
-      expect(mockAuthService.register).toHaveBeenCalledWith('newuser', 'new@example.com', 'password123')
-      expect(result).toEqual(mockResponse)
-    })
-
-    it('should handle getCurrentUser', async () => {
-      const mockResponse = {
-        id: 1,
-        username: 'testuser',
-        email: 'test@example.com',
-        role: 'user'
-      }
-      
-      mockAuthService.getCurrentUser.mockResolvedValue(mockResponse)
-
-      const authService = require('../../services/authService').default
-      const result = await authService.getCurrentUser()
-
-      expect(mockAuthService.getCurrentUser).toHaveBeenCalled()
-      expect(result).toEqual(mockResponse)
-    })
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/auth/login',
+      expect.any(FormData),
+    )
+    expect(result).toEqual({ access_token: 'token', token_type: 'bearer' })
   })
 
-  describe('Integration with Store', () => {
-    it('should work with zustand store', () => {
-      const useAuthStore = create((set) => ({
-        token: null as string | null,
-        user: null as any,
-        setAuth: (token: string, user: any) => set({ token, user }),
-        logout: () => set({ token: null, user: null })
-      }))
+  it('registers new user via /auth/register', async () => {
+    const payload = { username: 'new', email: 'a@b.com', password: 'pass' }
+    mockedApi.post.mockResolvedValue({ data: { id: 1, ...payload } })
 
-      const store = useAuthStore.getState()
-      expect(store).toHaveProperty('token')
-      expect(store).toHaveProperty('user')
-      expect(store).toHaveProperty('setAuth')
-      expect(store).toHaveProperty('logout')
-    })
+    const result = await authService.register(payload)
+
+    expect(mockedApi.post).toHaveBeenCalledWith('/auth/register', payload)
+    expect(result.id).toBe(1)
+  })
+
+  it('fetches current user via /auth/me', async () => {
+    const user = { id: 1, username: 'foo' }
+    mockedApi.get.mockResolvedValue({ data: user })
+
+    const result = await authService.getCurrentUser()
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/auth/me')
+    expect(result).toEqual(user)
   })
 })

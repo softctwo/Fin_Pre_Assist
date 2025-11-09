@@ -92,3 +92,18 @@ FRONTEND_TEST_COVERAGE_COMPLETE.md
 COMPREHENSIVE_TEST_REPORT.md
 TEST_FIXES_COMPLETE.md
 FRONTEND_80PERCENT_COVERAGE_PLAN.md
+
+# Root storage (do not commit large or user data)
+storage/
+
+# Frontend coverage result file
+frontend/coverage-results.json
+
+# Temp/backup files
+*.bak
+
+# One-off backend test artifacts
+backend/file:test_*
+
+# Local cloud config
+cloudbaserc.json

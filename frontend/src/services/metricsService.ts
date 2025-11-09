@@ -13,9 +13,12 @@ export interface MetricsSummary {
   vector_searches: number
 }
 
-export const getMetricsSummary = async (): Promise<MetricsSummary> => {
-  const { data } = await api.get<MetricsSummary>('/metrics/summary')
-  return data
+export const getMetricsSummary = async (): Promise<MetricsSummary | null> => {
+  const response = await api.get<MetricsSummary>('/metrics/summary')
+  if (response) {
+    return response.data
+  }
+  return null
 }
 
 const metricsService = {
