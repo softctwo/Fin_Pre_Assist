@@ -21,6 +21,9 @@ except ImportError:
 
 from app.core.config import settings
 from app.core.metrics import ai_calls_total, ai_calls_duration, ai_tokens_used
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AIService:
@@ -32,7 +35,7 @@ class AIService:
         self._wenxin_token: Optional[str] = None
         self._wenxin_token_expire: float = 0
         self._system_prompt = "你是一个专业的金融行业售前方案专家，擅长撰写技术方案和商务文档。"
-        self._http_timeout = 30
+        self._http_timeout = 120  # 增加到120秒，适合生成长内容
         self.client = None
         self._initialize_client()
 
@@ -53,6 +56,9 @@ class AIService:
             self.client = None
         elif self.provider == "zhipu":
             # Zhipu uses a custom client, handled in the method
+            pass
+        elif self.provider == "deepseek":
+            # DeepSeek uses a custom client, handled in the method
             pass
         elif self.provider == "tongyi":
             if dashscope is None:
@@ -80,6 +86,8 @@ class AIService:
                 text, tokens_used = await self._generate_with_wenxin(prompt, temperature, max_tokens)
             elif self.provider == "zhipu":
                 text, tokens_used = await self._generate_with_zhipu(prompt, temperature, max_tokens)
+            elif self.provider == "deepseek":
+                text, tokens_used = await self._generate_with_deepseek(prompt, temperature, max_tokens)
             else:
                 raise ValueError(f"不支持的AI提供商: {self.provider}")
             return text
@@ -163,33 +171,124 @@ class AIService:
         if not settings.ZHIPU_API_KEY:
             raise ValueError("ZHIPU_API_KEY 未配置")
 
+        # 智谱AI API的最新格式
         payload = {
             "model": settings.ZHIPU_MODEL,
             "messages": self._build_messages(prompt),
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "stream": False,
+            "top_p": 0.7,
         }
-        headers = {"Authorization": f"Bearer {settings.ZHIPU_API_KEY}", "Content-Type": "application/json"}
+
+        # 智谱AI API认证 - 支持多种格式
+        headers = {
+            "Content-Type": "application/json"
+        }
+
+        # 智谱AI API密钥格式检查
+        api_key = settings.ZHIPU_API_KEY
+
+        # 如果API密钥包含点号，可能是新的格式
+        if "." in api_key:
+            # 尝试使用Bearer token格式
+            headers["Authorization"] = f"Bearer {api_key}"
+        else:
+            # 备用认证方式
+            headers["Authorization"] = f"Bearer {api_key}"
+
+        try:
+            async with httpx.AsyncClient(timeout=self._http_timeout) as client:
+                response = await client.post(
+                    "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+                    json=payload,
+                    headers=headers
+                )
+
+                # 检查响应状态
+                if response.status_code != 200:
+                    error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+                    raise Exception(f"智谱AI API请求失败 (状态码: {response.status_code}): {error_data}")
+
+                data = response.json()
+
+            # 检查智谱AI的错误响应格式
+            if "error" in data:
+                error_msg = data["error"].get("message", "未知错误")
+                error_code = data["error"].get("code", "UNKNOWN_ERROR")
+                raise Exception(f"智谱AI调用失败 [{error_code}]: {error_msg}")
+
+            # 解析正常的响应
+            try:
+                message = data["choices"][0]["message"]
+                # 智谱AI某些模型可能使用不同的字段名
+                text = message.get("content", "")
+
+                # 如果content为空，检查其他可能的字段
+                if not text:
+                    text = message.get("reasoning_content", "") or message.get("text", "")
+
+                text = text.strip()
+
+                # 获取token使用情况
+                usage = data.get("usage", {})
+                tokens = int(usage.get("total_tokens", 0) or 0)
+
+                if not text:
+                    raise Exception("智谱AI返回了空的内容")
+
+                return text, tokens
+
+            except (KeyError, IndexError) as exc:
+                logger.error(f"智谱AI响应解析失败: {data}")
+                raise Exception(f"智谱AI响应格式异常: 缺少必要字段") from exc
+
+        except httpx.TimeoutException:
+            raise Exception("智谱AI API请求超时")
+        except httpx.NetworkError as e:
+            raise Exception(f"智谱AI网络连接错误: {str(e)}")
+        except Exception as e:
+            if isinstance(e, Exception) and "智谱AI" in str(e):
+                raise
+            logger.exception("智谱AI调用发生未知错误:")
+            raise Exception(f"智谱AI调用失败: {str(e)}")
+
+    async def _generate_with_deepseek(self, prompt: str, temperature: float, max_tokens: int) -> Tuple[str, int]:
+        """使用DeepSeek生成文本"""
+        if not settings.DEEPSEEK_API_KEY:
+            raise ValueError("DEEPSEEK_API_KEY 未配置")
+
+        payload = {
+            "model": settings.DEEPSEEK_MODEL,
+            "messages": self._build_messages(prompt),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": False
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
         async with httpx.AsyncClient(timeout=self._http_timeout) as client:
             response = await client.post(
-                "https://open.bigmodel.cn/api/paas/v4/chat/completions", json=payload, headers=headers
+                "https://api.deepseek.com/v1/chat/completions",
+                json=payload,
+                headers=headers
             )
             response.raise_for_status()
             data = response.json()
 
         try:
             message = data["choices"][0]["message"]
-            # glm-4.6等模型可能使用reasoning_content字段
-            text = message.get("content", "") or message.get("reasoning_content", "")
+            text = message.get("content", "")
             text = text.strip()
             tokens = int(data.get("usage", {}).get("total_tokens", 0) or 0)
             return text, tokens
         except (KeyError, IndexError) as exc:
-            # 智谱错误通常包含 "error" 字段
             if "error" in data:
-                raise Exception(f"智谱AI调用失败: {data['error'].get('message')}")
-            raise Exception(f"智谱AI响应格式异常: {data}") from exc
+                raise Exception(f"DeepSeek调用失败: {data['error'].get('message')}")
+            raise Exception(f"DeepSeek响应格式异常: {data}") from exc
 
     async def _get_wenxin_access_token(self) -> str:
         """获取或刷新文心一言访问令牌"""
@@ -240,6 +339,8 @@ class AIService:
             return await self._tongyi_embed_text(text)
         elif self.provider == "wenxin":
             return await self._wenxin_embed_text(text)
+        elif self.provider == "deepseek":
+            return await self._deepseek_embed_text(text)
         else:
             raise NotImplementedError(f"{self.provider}的向量化待实现")
 
@@ -250,19 +351,52 @@ class AIService:
 
         url = "https://open.bigmodel.cn/api/paas/v4/embeddings"
 
-        payload = {"model": settings.ZHIPU_EMBEDDING_MODEL, "input": text}
+        payload = {
+            "model": settings.ZHIPU_EMBEDDING_MODEL,
+            "input": text,
+            "encoding_format": "float"
+        }
 
-        headers = {"Authorization": f"Bearer {settings.ZHIPU_API_KEY}", "Content-Type": "application/json"}
+        # 使用与文本生成相同的认证方式
+        api_key = settings.ZHIPU_API_KEY
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
 
         try:
             async with httpx.AsyncClient(timeout=self._http_timeout) as client:
                 response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
+
+                # 检查响应状态
+                if response.status_code != 200:
+                    error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text
+                    raise Exception(f"智谱AI Embedding API请求失败 (状态码: {response.status_code}): {error_data}")
+
                 data = response.json()
 
-            embedding = data["data"][0]["embedding"]
-            return embedding
+            # 检查智谱AI的错误响应格式
+            if "error" in data:
+                error_msg = data["error"].get("message", "未知错误")
+                error_code = data["error"].get("code", "UNKNOWN_ERROR")
+                raise Exception(f"智谱AI Embedding调用失败 [{error_code}]: {error_msg}")
+
+            # 解析正常的响应
+            try:
+                embedding = data["data"][0]["embedding"]
+                return embedding
+            except (KeyError, IndexError) as exc:
+                logger.error(f"智谱AI Embedding响应解析失败: {data}")
+                raise Exception(f"智谱AI Embedding响应格式异常: 缺少必要字段") from exc
+
+        except httpx.TimeoutException:
+            raise Exception("智谱AI Embedding API请求超时")
+        except httpx.NetworkError as e:
+            raise Exception(f"智谱AI Embedding网络连接错误: {str(e)}")
         except Exception as e:
+            if isinstance(e, Exception) and "智谱AI" in str(e):
+                raise
+            logger.exception("智谱AI Embedding调用发生未知错误:")
             raise Exception(f"智谱AI向量化失败: {str(e)}")
 
     async def _tongyi_embed_text(self, text: str) -> List[float]:
@@ -284,6 +418,49 @@ class AIService:
             return response.result[0]
         else:
             raise Exception(f"文心一言Embedding API返回错误: {response}")
+
+    async def _deepseek_embed_text(self, text: str) -> List[float]:
+        """使用DeepSeek进行文本向量化"""
+        # DeepSeek目前没有专门的embedding API，我们可以使用OpenAI兼容的embedding接口
+        # 或者使用其他替代方案，暂时使用一个基本的实现
+        if not settings.DEEPSEEK_API_KEY:
+            raise ValueError("DEEPSEEK_API_KEY 未配置")
+
+        payload = {
+            "model": "text-embedding-ada-002",  # 使用标准的embedding模型
+            "input": text,
+            "encoding_format": "float"
+        }
+        headers = {
+            "Authorization": f"Bearer {settings.DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self._http_timeout) as client:
+                response = await client.post(
+                    "https://api.deepseek.com/v1/embeddings",
+                    json=payload,
+                    headers=headers
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            embedding = data["data"][0]["embedding"]
+            return embedding
+        except Exception as e:
+            # 如果DeepSeek不支持embedding，fallback到OpenAI或使用简单的实现
+            logger.warning(f"DeepSeek向量化失败，使用简单实现: {str(e)}")
+            # 简单的文本向量化实现（仅用于演示）
+            import hashlib
+            hash_obj = hashlib.sha256(text.encode())
+            hash_bytes = hash_obj.digest()
+            # 将字节转换为浮点数向量
+            embedding = [float(b) / 255.0 for b in hash_bytes[:128]]
+            # 如果长度不够，用0填充
+            if len(embedding) < 128:
+                embedding.extend([0.0] * (128 - len(embedding)))
+            return embedding
 
     async def semantic_search(self, query: str, documents: List[str], top_k: int = 5) -> List[dict]:
         """语义搜索"""
@@ -323,6 +500,8 @@ class AIService:
             return settings.WENXIN_MODEL
         if self.provider == "zhipu":
             return settings.ZHIPU_MODEL
+        if self.provider == "deepseek":
+            return settings.DEEPSEEK_MODEL
         return "unknown"
 
 

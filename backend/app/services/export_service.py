@@ -7,6 +7,14 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from loguru import logger
 
 from app.core.config import settings
@@ -83,15 +91,129 @@ class ExportService:
     def export_proposal_to_pdf(proposal: Proposal) -> str:
         """导出方案为PDF文档"""
         try:
-            # 先导出为Word
-            word_file = ExportService.export_proposal_to_word(proposal)
+            # 设置PDF文件路径
+            filename = f"proposal_{proposal.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+            filepath = os.path.join(settings.EXPORT_DIR, filename)
 
-            # TODO: 使用python-docx2pdf或其他库转换为PDF
-            # 这里暂时返回Word文件路径
-            # 实际生产环境中，需要安装LibreOffice或使用云服务进行转换
+            # 创建PDF文档
+            doc = SimpleDocTemplate(filepath, pagesize=A4)
 
-            logger.info("PDF导出功能待完善，当前返回Word文档")
-            return word_file
+            # 获取样式
+            styles = getSampleStyleSheet()
+
+            # 尝试注册中文字体
+            try:
+                # 尝试注册常见的中文字体
+                font_paths = [
+                    '/System/Library/Fonts/PingFang.ttc',
+                    '/System/Library/Fonts/STSong.ttc',
+                    '/System/Library/Fonts/Hiragino Sans GB.ttc',
+                    '/System/Library/Fonts/Hiragino Sans GB W3.ttc'
+                ]
+
+                chinese_font = None
+                for font_path in font_paths:
+                    if os.path.exists(font_path):
+                        try:
+                            pdfmetrics.registerFont(TTFont('ChineseFont', font_path))
+                            chinese_font = 'ChineseFont'
+                            logger.info(f"成功注册中文字体: {font_path}")
+                            break
+                        except Exception as font_error:
+                            logger.warning(f"字体注册失败 {font_path}: {font_error}")
+                            continue
+            except Exception as e:
+                logger.warning(f"中文字体注册过程出错: {e}")
+
+            # 创建自定义样式
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=18,
+                spaceAfter=30,
+                alignment=TA_CENTER,
+                textColor='black',
+                fontName=chinese_font
+            )
+
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=14,
+                spaceAfter=12,
+                spaceBefore=20,
+                textColor='black',
+                fontName=chinese_font
+            )
+
+            content_style = ParagraphStyle(
+                'CustomContent',
+                parent=styles['Normal'],
+                fontSize=11,
+                spaceAfter=6,
+                leading=14,
+                alignment=TA_JUSTIFY,
+                textColor='black',
+                fontName=chinese_font
+            )
+
+            # 构建文档内容
+            story = []
+
+            # 标题
+            story.append(Paragraph(proposal.title, title_style))
+            story.append(Spacer(1, 12))
+
+            # 基本信息
+            story.append(Paragraph(f"<b>客户名称:</b> {proposal.customer_name}", content_style))
+            story.append(Paragraph(f"<b>创建时间:</b> {proposal.created_at.strftime('%Y年%m月%d日')}", content_style))
+            if proposal.customer_industry:
+                story.append(Paragraph(f"<b>所属行业:</b> {proposal.customer_industry}", content_style))
+            story.append(Spacer(1, 20))
+
+            # 客户需求
+            story.append(Paragraph("一、客户需求", heading_style))
+            # 处理文本，保留换行
+            requirements_text = proposal.requirements.replace('\n', '<br/>').replace('\r\n', '<br/>')
+            story.append(Paragraph(requirements_text, content_style))
+            story.append(Spacer(1, 12))
+
+            # 执行摘要
+            if proposal.executive_summary:
+                story.append(PageBreak())
+                story.append(Paragraph("二、执行摘要", heading_style))
+                exec_summary_text = proposal.executive_summary.replace('\n', '<br/>').replace('\r\n', '<br/>')
+                story.append(Paragraph(exec_summary_text, content_style))
+                story.append(Spacer(1, 12))
+
+            # 解决方案概述
+            if proposal.solution_overview:
+                story.append(PageBreak())
+                story.append(Paragraph("三、解决方案概述", heading_style))
+                solution_text = proposal.solution_overview.replace('\n', '<br/>').replace('\r\n', '<br/>')
+                story.append(Paragraph(solution_text, content_style))
+                story.append(Spacer(1, 12))
+
+            # 技术实现方案
+            if proposal.technical_details:
+                story.append(PageBreak())
+                story.append(Paragraph("四、技术实现方案", heading_style))
+                tech_text = proposal.technical_details.replace('\n', '<br/>').replace('\r\n', '<br/>')
+                story.append(Paragraph(tech_text, content_style))
+                story.append(Spacer(1, 12))
+
+            # 项目实施计划
+            if proposal.implementation_plan:
+                story.append(PageBreak())
+                story.append(Paragraph("五、项目实施计划", heading_style))
+                impl_text = proposal.implementation_plan.replace('\n', '<br/>').replace('\r\n', '<br/>')
+                story.append(Paragraph(impl_text, content_style))
+
+            # 生成PDF
+            doc.build(story)
+
+            logger.info(f"PDF文档导出成功: {filepath}")
+            return filepath
 
         except Exception as e:
             logger.error(f"导出PDF失败: {e}")

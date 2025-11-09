@@ -25,9 +25,30 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response) => {
+    // 检查是否是文件下载请求
+    const contentType = response.headers?.['content-type'] || '';
+    const contentDisposition = response.headers?.['content-disposition'] || '';
+    const isFileDownload = contentType.includes('application/') &&
+                        (contentDisposition.includes('attachment') ||
+                         contentType.includes('application/octet-stream') ||
+                         contentType.includes('pdf') ||
+                         contentType.includes('docx') ||
+                         contentType.includes('xlsx'));
+
+    if (isFileDownload) {
+      // 文件下载请求直接返回，不进行错误处理
+      return response;
+    }
+
     return response
   },
   (error) => {
+    // 对于文件下载请求的特殊处理
+    if (error.response?.config?.responseType === 'blob') {
+      // 文件下载错误也不显示通用错误消息
+      return Promise.reject(error);
+    }
+
     if (error.response) {
       switch (error.response.status) {
         case 401:

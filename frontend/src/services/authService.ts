@@ -14,10 +14,15 @@ export interface RegisterData {
 
 export const authService = {
   async login(data: LoginData) {
-    const formData = new FormData()
-    formData.append('username', data.username)
-    formData.append('password', data.password)
-    const response = await api.post('/auth/login', formData)
+    // 使用URLSearchParams而不是FormData，以确保正确发送application/x-www-form-urlencoded格式
+    const params = new URLSearchParams()
+    params.append('username', data.username)
+    params.append('password', data.password)
+    const response = await api.post('/auth/login', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    })
     return response.data
   },
 

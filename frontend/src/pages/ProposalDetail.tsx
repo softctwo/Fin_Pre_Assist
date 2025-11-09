@@ -5,6 +5,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { proposalService, type Proposal } from '../services/proposalService'
 import { ThunderboltOutlined, DownloadOutlined } from '@ant-design/icons'
 import ProposalGenerationProgress from '../components/ProposalGenerationProgress'
+import { handleFileDownload } from '../utils/fileDownload'
 
 const ProposalDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -13,6 +14,7 @@ const ProposalDetail = () => {
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -73,11 +75,34 @@ const ProposalDetail = () => {
   const handleExport = async (format: string) => {
     if (!proposal) return
 
+    setExporting(format)
+
     try {
-      await proposalService.export(proposal.id, format)
-      message.success('导出成功')
-    } catch (error) {
+      const response = await proposalService.export(proposal.id, format)
+
+      // 处理文件下载
+      const filename = `${proposal.title}.${format}`
+      const success = handleFileDownload(response, filename)
+
+      if (success) {
+        message.success(`${format.toUpperCase()} 导出成功`)
+      } else {
+        message.error('导出失败：响应不是文件格式')
+      }
+    } catch (error: any) {
       console.error('导出失败:', error)
+      // 处理认证错误
+      if (error.response?.status === 401) {
+        message.error('认证失败，请重新登录')
+      } else if (error.response?.status === 403) {
+        message.error('无权限导出此方案')
+      } else if (error.response?.status === 404) {
+        message.error('方案不存在或未完成生成')
+      } else {
+        message.error(`导出失败: ${error.message || '未知错误'}`)
+      }
+    } finally {
+      setExporting(null)
     }
   }
 
@@ -116,13 +141,22 @@ const ProposalDetail = () => {
             <>
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() => window.open(`/api/v1/proposals/${proposal.id}/export?format=docx`, '_blank')}
+                onClick={() => handleExport('docx')}
+                loading={exporting === 'docx'}
               >
                 导出Word
               </Button>
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() => window.open(`/api/v1/proposals/${proposal.id}/export?format=xlsx`, '_blank')}
+                onClick={() => handleExport('pdf')}
+                loading={exporting === 'pdf'}
+              >
+                导出PDF
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => handleExport('xlsx')}
+                loading={exporting === 'xlsx'}
               >
                 导出报价单
               </Button>

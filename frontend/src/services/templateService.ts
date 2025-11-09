@@ -13,7 +13,7 @@ export interface Template {
   created_at: string
 }
 
-const templateService = {
+export const templateService = {
   async create(data: {
     name: string
     type: string

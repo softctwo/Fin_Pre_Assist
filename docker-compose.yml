@@ -32,7 +32,7 @@ services:
       dockerfile: Dockerfile
     container_name: fin_pre_assist_backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       - DATABASE_URL=postgresql://finpre:finpre123@postgres:5432/fin_pre_assist
       - REDIS_HOST=redis
@@ -54,7 +54,7 @@ services:
       dockerfile: Dockerfile
     container_name: fin_pre_assist_frontend
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules

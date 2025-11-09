@@ -135,10 +135,16 @@ async def generate_proposal(
         return proposal
 
     except Exception as e:
+        # 记录详细错误信息
+        logger.error(f"方案生成失败 - Proposal ID: {proposal_id}, User: {current_user.id}")
+        logger.error(f"错误类型: {type(e).__name__}")
+        logger.error(f"错误信息: {str(e)}")
+        logger.exception("方案生成异常详情:")
+
         # 发生错误，恢复草稿状态
         proposal.status = ProposalStatus.DRAFT
         db.commit()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"方案生成失败: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"方案生成失败: {type(e).__name__}: {str(e)}")
 
 
 @router.get("/", response_model=ProposalList)

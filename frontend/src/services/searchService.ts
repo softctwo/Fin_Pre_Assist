@@ -8,7 +8,7 @@ export interface SearchResult {
   relevance_score: number
 }
 
-const searchService = {
+export const searchService = {
   async searchDocuments(params: {
     query: string
     limit?: number

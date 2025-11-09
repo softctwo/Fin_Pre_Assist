@@ -13,7 +13,7 @@ export interface Document {
   created_at: string
 }
 
-const documentService = {
+export const documentService = {
   async upload(file: File, data: {
     title: string
     doc_type: string

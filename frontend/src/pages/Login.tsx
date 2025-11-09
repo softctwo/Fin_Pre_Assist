@@ -15,13 +15,31 @@ const Login = () => {
   const onLogin = async (values: any) => {
     setLoading(true)
     try {
+      // 步骤1: 登录获取token
       const data = await authService.login(values)
-      const user = await authService.getCurrentUser()
-      setAuth(data.access_token, user)
-      message.success('登录成功')
-      navigate('/')
+      console.log('登录成功，获得token:', data.access_token)
+
+      // 步骤2: 先保存认证信息到store
+      setAuth(data.access_token, null) // 先保存token，用户信息暂时为null
+
+      // 步骤3: 获取用户信息 (此时axios拦截器已经有token了)
+      try {
+        const user = await authService.getCurrentUser()
+        console.log('获取用户信息成功:', user)
+
+        // 步骤4: 更新用户信息并跳转
+        setAuth(data.access_token, user) // 更新完整的用户信息
+        message.success('登录成功')
+        navigate('/')
+      } catch (userError) {
+        console.error('获取用户信息失败:', userError)
+        message.error('登录成功但获取用户信息失败，请重试')
+        // 清除已保存的token
+        useAuthStore.getState().logout()
+      }
     } catch (error) {
       console.error('登录失败:', error)
+      message.error('登录失败，请检查用户名和密码')
     } finally {
       setLoading(false)
     }

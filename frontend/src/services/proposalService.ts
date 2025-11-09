@@ -87,10 +87,11 @@ export const proposalService = {
   },
 
   async export(id: number, format: string) {
-    const response = await api.post(`/proposals/${id}/export`, null, {
+    const response = await api.get(`/proposals/${id}/export`, {
       params: { format },
+      responseType: 'blob', // 重要：指定响应类型为blob
     })
-    return response.data
+    return response
   },
 
   async getProposals(params?: any) {

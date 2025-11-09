@@ -1,5 +1,6 @@
 """方案生成服务 - 增强版"""
 
+import asyncio
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -32,11 +33,46 @@ class ProposalGenerator:
         # 4. 生成各部分内容（并行生成以提高速度）
         logger.info("开始生成方案各部分内容...")
 
-        executive_summary = await self._generate_executive_summary(proposal, context)
-        solution_overview = await self._generate_solution_overview(proposal, context)
-        technical_details = await self._generate_technical_details(proposal, context)
-        implementation_plan = await self._generate_implementation_plan(proposal, context)
-        pricing = await self._generate_pricing(proposal, context)
+        try:
+            # 并行生成所有部分
+            tasks = [
+                self._generate_executive_summary(proposal, context),
+                self._generate_solution_overview(proposal, context),
+                self._generate_technical_details(proposal, context),
+                self._generate_implementation_plan(proposal, context),
+                self._generate_pricing(proposal, context)
+            ]
+
+            # 设置总超时时间
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=180.0  # 3分钟总超时
+            )
+
+            # 处理结果
+            executive_summary = results[0] if not isinstance(results[0], Exception) else "生成失败，请重试"
+            solution_overview = results[1] if not isinstance(results[1], Exception) else "生成失败，请重试"
+            technical_details = results[2] if not isinstance(results[2], Exception) else "生成失败，请重试"
+            implementation_plan = results[3] if not isinstance(results[3], Exception) else "生成失败，请重试"
+            pricing = results[4] if not isinstance(results[4], Exception) else None
+
+            # 记录异常
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    section_names = ["执行摘要", "解决方案概述", "技术细节", "实施计划", "报价"]
+                    logger.error(f"生成{section_names[i]}失败: {str(result)}")
+
+        except asyncio.TimeoutError:
+            logger.error("方案生成超时")
+            # 返回超时提示
+            return {
+                "executive_summary": "生成超时，请重试",
+                "solution_overview": "生成超时，请重试",
+                "technical_details": "生成超时，请重试",
+                "implementation_plan": "生成超时，请重试",
+                "pricing": None,
+                "full_content": "生成超时，请重试",
+            }
 
         # 5. 生成完整内容
         full_content = self._combine_content(

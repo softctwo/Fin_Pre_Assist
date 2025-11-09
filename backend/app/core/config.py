@@ -51,7 +51,10 @@ class Settings(BaseSettings):
     ZHIPU_MODEL: str = "glm-4"
     ZHIPU_EMBEDDING_MODEL: str = "embedding-2"
 
-    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/local
+    DEEPSEEK_API_KEY: str = ""  # DeepSeek API密钥
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
+    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/deepseek/local
 
     # 文件存储配置
     UPLOAD_DIR: str = "./storage/documents"

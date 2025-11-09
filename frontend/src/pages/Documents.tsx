@@ -34,9 +34,42 @@ const Documents = () => {
       return
     }
 
+    console.log('准备上传文件:', fileList)
+    console.log('表单数据:', values)
+
     setLoading(true)
     try {
-      const file = fileList[0].originFileObj as File
+      const fileItem = fileList[0]
+      console.log('文件项对象:', fileItem)
+
+      // 尝试多种方式获取文件对象
+      let file: File | null = null
+
+      if (fileItem.originFileObj) {
+        file = fileItem.originFileObj as File
+        console.log('通过 originFileObj 获取文件:', file)
+      } else if (fileItem instanceof File) {
+        file = fileItem
+        console.log('直接使用文件项:', file)
+      } else {
+        console.error('无法获取文件对象，文件项:', fileItem)
+        message.error('文件对象无效，请重新选择文件')
+        return
+      }
+
+      if (!file || !file.name || !file.size) {
+        console.error('文件对象不完整:', file)
+        message.error('文件对象不完整，请重新选择文件')
+        return
+      }
+
+      console.log('最终文件对象:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        lastModified: file.lastModified
+      })
+
       await documentService.upload(file, values)
       message.success('上传成功')
       setModalVisible(false)
@@ -45,6 +78,12 @@ const Documents = () => {
       loadDocuments()
     } catch (error) {
       console.error('上传失败:', error)
+      // 显示用户友好的错误信息
+      if (error instanceof Error) {
+        message.error(`上传失败: ${error.message}`)
+      } else {
+        message.error('上传失败，请重试')
+      }
     } finally {
       setLoading(false)
     }
@@ -151,6 +190,7 @@ const Documents = () => {
         title="上传文档"
         open={modalVisible}
         onCancel={() => {
+          console.log('关闭上传模态框，清理状态')
           setModalVisible(false)
           form.resetFields()
           setFileList([])
@@ -193,7 +233,14 @@ const Documents = () => {
             <Upload
               fileList={fileList}
               beforeUpload={(file) => {
-                setFileList([file as any])
+                // 确保文件对象包含 originFileObj
+                const fileWithOrigin = {
+                  uid: file.uid,
+                  name: file.name,
+                  status: 'done',
+                  originFileObj: file, // 关键：保存原始文件对象
+                }
+                setFileList([fileWithOrigin as any])
                 return false
               }}
               onRemove={() => setFileList([])}

@@ -10,8 +10,10 @@ const Templates = () => {
   const [templates, setTemplates] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
   const [previewVisible, setPreviewVisible] = useState(false)
   const [previewContent, setPreviewContent] = useState('')
+  const [currentTemplate, setCurrentTemplate] = useState<any | null>(null)
   const [form] = Form.useForm()
 
   useEffect(() => {
@@ -40,6 +42,42 @@ const Templates = () => {
       loadTemplates()
     } catch (error) {
       console.error('创建失败:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEdit = async (template: any) => {
+    try {
+      const templateDetail = await templateService.get(template.id)
+      setCurrentTemplate(templateDetail)
+      form.setFieldsValue({
+        name: templateDetail.name,
+        type: templateDetail.type,
+        description: templateDetail.description,
+        content: templateDetail.content
+      })
+      setEditModalVisible(true)
+    } catch (error) {
+      console.error('获取模板详情失败:', error)
+      message.error('获取模板详情失败')
+    }
+  }
+
+  const handleUpdate = async (values: any) => {
+    if (!currentTemplate) return
+
+    setLoading(true)
+    try {
+      await templateService.update(currentTemplate.id, values)
+      message.success('更新成功')
+      setEditModalVisible(false)
+      form.resetFields()
+      setCurrentTemplate(null)
+      loadTemplates()
+    } catch (error) {
+      console.error('更新失败:', error)
+      message.error('更新失败')
     } finally {
       setLoading(false)
     }
@@ -132,6 +170,7 @@ const Templates = () => {
           <Button
             type="link"
             icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
@@ -225,6 +264,73 @@ const Templates = () => {
               <Button onClick={() => {
                 setModalVisible(false)
                 form.resetFields()
+              }}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="编辑模板"
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false)
+          form.resetFields()
+          setCurrentTemplate(null)
+        }}
+        footer={null}
+        width={800}
+      >
+        <Form form={form} onFinish={handleUpdate} layout="vertical">
+          <Form.Item
+            name="name"
+            label="模板名称"
+            rules={[{ required: true, message: '请输入模板名称' }]}
+          >
+            <Input placeholder="请输入模板名称" />
+          </Form.Item>
+
+          <Form.Item
+            name="type"
+            label="模板类型"
+            rules={[{ required: true, message: '请选择模板类型' }]}
+          >
+            <Select placeholder="请选择模板类型">
+              <Select.Option value="proposal">方案模板</Select.Option>
+              <Select.Option value="quotation">报价单</Select.Option>
+              <Select.Option value="contract">合同</Select.Option>
+              <Select.Option value="presentation">演示文稿</Select.Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="description" label="描述">
+            <Input placeholder="请输入描述" />
+          </Form.Item>
+
+          <Form.Item
+            name="content"
+            label="模板内容"
+            rules={[{ required: true, message: '请输入模板内容' }]}
+            extra="支持使用 {{ variable_name }} 格式定义变量"
+          >
+            <TextArea
+              rows={15}
+              placeholder="请输入模板内容，使用 {{ variable_name }} 定义变量"
+              style={{ fontFamily: 'monospace' }}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit" loading={loading}>
+                更新
+              </Button>
+              <Button onClick={() => {
+                setEditModalVisible(false)
+                form.resetFields()
+                setCurrentTemplate(null)
               }}>
                 取消
               </Button>
