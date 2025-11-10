@@ -1,21 +1,22 @@
 """方案生成服务 - 增强版"""
 
 import asyncio
+import json
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from loguru import logger
 
-from app.models import Proposal
+from app.models import Proposal, AIModel
 from app.services.ai_service import AIService
 from app.services.vector_service import vector_service
 
 
 class ProposalGenerator:
-    """方案生成器 - 使用向量搜索和优化提示词"""
+    """方案生成器 - 支持多模型选择"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, model_config: Optional[AIModel] = None):
         self.db = db
-        self.ai_service = AIService()
+        self.ai_service = AIService(model_config)
 
     async def generate(self, proposal: Proposal) -> Dict:
         """生成方案内容"""
@@ -355,11 +356,57 @@ JSON格式输出：
 """
         try:
             result = await self.ai_service.generate_text(prompt, temperature=0.5, max_tokens=500)
-            # TODO: 解析JSON结果
-            return {"raw": result}
+            parsed = self._parse_pricing_result(result)
+            return {"data": parsed, "raw": result}
         except Exception as e:
             logger.error(f"生成报价失败: {e}")
             return None
+
+    def _parse_pricing_result(self, text: str) -> Optional[Dict]:
+        """解析AI返回的JSON报价信息"""
+        if not text:
+            return None
+
+        cleaned = text.replace("```json", "").replace("```", "").strip()
+
+        candidate = cleaned
+        if cleaned and not cleaned.lstrip().startswith("{"):
+            start = cleaned.find("{")
+            end = cleaned.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                candidate = cleaned[start : end + 1]
+
+        try:
+            data = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        numeric_fields = {
+            "software_license",
+            "implementation",
+            "training",
+            "support_yearly",
+            "total",
+        }
+
+        def _normalize_value(key: str, value):
+            if key not in numeric_fields:
+                return value.strip() if isinstance(value, str) else value
+            if isinstance(value, (int, float)):
+                return value
+            if isinstance(value, str):
+                stripped = value.replace(",", "").replace("元", "").strip()
+                try:
+                    number = float(stripped)
+                    return int(number) if number.is_integer() else number
+                except ValueError:
+                    return value
+            return value
+
+        return {k: _normalize_value(k, v) for k, v in data.items()}
 
     def _combine_content(self, *sections) -> str:
         """合并所有内容为完整方案"""
@@ -373,3 +420,32 @@ JSON格式输出：
                 parts.append(section_titles[i] + section)
 
         return "".join(parts)
+
+    async def _parse_proposal_content(self, full_content: str) -> Dict:
+        """解析生成的内容为结构化格式"""
+        try:
+            # 这里实现内容的结构化解析
+            # 简单实现：将完整内容作为主要内容
+            return {
+                "requirements": full_content[:500] + "..." if len(full_content) > 500 else full_content,
+                "executive_summary": full_content[:300] + "..." if len(full_content) > 300 else full_content,
+                "solution_overview": full_content,
+                "technical_details": "",
+                "implementation_plan": "",
+                "full_content": full_content
+            }
+        except Exception as e:
+            logger.error(f"内容解析失败: {e}")
+            return {
+                "requirements": full_content,
+                "executive_summary": full_content,
+                "solution_overview": full_content,
+                "technical_details": "",
+                "implementation_plan": "",
+                "full_content": full_content,
+                "parse_error": str(e)
+            }
+
+
+# 全局实例
+proposal_generator = ProposalGenerator(db=None)  # 在使用时需要传入db实例

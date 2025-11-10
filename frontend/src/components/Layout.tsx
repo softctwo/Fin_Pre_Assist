@@ -9,6 +9,7 @@ import {
   BookOutlined,
   UserOutlined,
   LogoutOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../store/authStore'
 import type { MenuProps } from 'antd'
@@ -35,6 +36,20 @@ const Layout = () => {
       key: '/proposals',
       icon: <FormOutlined />,
       label: '方案生成',
+      children: [
+        {
+          key: '/proposals/create',
+          label: '快速生成',
+        },
+        {
+          key: '/proposals/multi-model',
+          label: '多模型生成',
+        },
+        {
+          key: '/proposals',
+          label: '方案列表',
+        },
+      ],
     },
     {
       key: '/templates',
@@ -45,6 +60,11 @@ const Layout = () => {
       key: '/knowledge',
       icon: <BookOutlined />,
       label: '知识库',
+    },
+    {
+      key: '/ai-models',
+      icon: <SettingOutlined />,
+      label: 'AI模型配置',
     },
   ]
 

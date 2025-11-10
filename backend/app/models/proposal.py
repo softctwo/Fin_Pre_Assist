@@ -32,6 +32,10 @@ class Proposal(Base):
     requirements = Column(Text)  # 客户需求描述
     requirements_structured = Column(JSON)  # 结构化需求
 
+    # 预算和周期信息
+    budget_range = Column(String(100))  # 预算范围
+    timeline = Column(String(100))  # 项目周期
+
     # 生成的内容
     executive_summary = Column(Text)  # 执行摘要
     solution_overview = Column(Text)  # 解决方案概述
@@ -60,6 +64,7 @@ class Proposal(Base):
 
     # 关系
     user = relationship("User", back_populates="proposals")
+    versions = relationship("ProposalVersion", back_populates="proposal", cascade="all, delete-orphan")
 
     # 复合索引 - 优化常用查询
     __table_args__ = (

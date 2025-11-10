@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试登录功能</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { padding: 8px 12px; font-size: 14px; }
+        input { width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #40a9ff; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+    </style>
+</head>
+<body>
+    <h1>登录功能测试</h1>
+    <p>这个页面用于测试前端到后端的登录功能</p>
+
+    <div class="form-group">
+        <label for="username">用户名:</label>
+        <input type="text" id="username" value="admin">
+    </div>
+
+    <div class="form-group">
+        <label for="password">密码:</label>
+        <input type="password" id="password" value="admin123">
+    </div>
+
+    <button onclick="testLogin()">测试登录</button>
+    <button onclick="testAPI()">测试API连接</button>
+    <button onclick="clearResults()">清除结果</button>
+
+    <div id="results"></div>
+
+    <script>
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            resultsDiv.appendChild(div);
+        }
+
+        function testAPI() {
+            addResult('正在测试API连接...', 'info');
+
+            fetch('/api/v1/health')
+                .then(response => {
+                    if (response.ok) {
+                        addResult('❌ /api/v1/health 不存在 (这是正常的)', 'error');
+                    } else {
+                        addResult(`❌ API健康检查失败: ${response.status} ${response.statusText}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    addResult(`❌ API连接失败: ${error.message}`, 'error');
+                });
+
+            fetch('/health')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                })
+                .then(data => {
+                    addResult(`✅ 后端健康检查成功: ${JSON.stringify(data)}`, 'success');
+                })
+                .catch(error => {
+                    addResult(`❌ 后端健康检查失败: ${error.message}`, 'error');
+                });
+        }
+
+        function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            addResult(`正在尝试登录用户: ${username}`, 'info');
+
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            fetch('/api/v1/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: formData
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.detail || '登录失败');
+                    });
+                }
+            })
+            .then(data => {
+                addResult(`✅ 登录成功!`, 'success');
+                addResult(`Access Token: ${data.access_token.substring(0, 50)}...`, 'success');
+                addResult(`Token Type: ${data.token_type}`, 'success');
+
+                // 测试受保护的API
+                return fetch('/api/v1/multi-model-proposals/models/available', {
+                    headers: {
+                        'Authorization': `Bearer ${data.access_token}`
+                    }
+                });
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error(`API请求失败: ${response.status}`);
+                }
+            })
+            .then(models => {
+                addResult(`✅ 受保护API访问成功! 找到 ${models.length} 个AI模型`, 'success');
+                models.forEach(model => {
+                    addResult(`- ${model.name} (${model.provider})`, 'info');
+                });
+            })
+            .catch(error => {
+                addResult(`❌ 错误: ${error.message}`, 'error');
+            });
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时自动测试API
+        window.onload = function() {
+            addResult('页面加载完成，开始自动测试...', 'info');
+            testAPI();
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端测试页面</title>
+</head>
+<body>
+    <h1>前端应用测试页面</h1>
+    <p>如果你能看到这个页面，说明前端服务器正常工作。</p>
+    <div>时间: <span id="time"></span></div>
+
+    <script>
+        document.getElementById('time').textContent = new Date().toLocaleString();
+
+        // 测试前端代理
+        fetch('/api/v1/multi-model-proposals/models/available')
+            .then(response => response.json())
+            .then(data => {
+                console.log('API测试成功:', data);
+                document.body.innerHTML += '<p style="color: green;">API代理测试成功！已连接到后端。</p>';
+            })
+            .catch(error => {
+                console.error('API测试失败:', error);
+                document.body.innerHTML += '<p style="color: red;">API代理测试失败：' + error.message + '</p>';
+            });
+    </script>
+</body>
+</html>

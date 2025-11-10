@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档管理调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        button { padding: 8px 12px; font-size: 14px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+        button:hover { background: #40a9ff; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px; text-align: left; border: 1px solid #ddd; }
+        th { background: #f5f5f5; }
+        .loading { color: #1890ff; }
+    </style>
+</head>
+<body>
+    <h1>文档管理调试</h1>
+
+    <div class="form-group">
+        <button onclick="testLogin()">登录获取Token</button>
+        <button onclick="testDocuments()">测试文档API</button>
+        <button onclick="clearResults()">清除结果</button>
+    </div>
+
+    <div id="token-status" class="result info">
+        <strong>Token状态:</strong> 未获取
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        let authToken = '';
+
+        async function testLogin() {
+            const resultsDiv = document.getElementById('results');
+            const tokenStatus = document.getElementById('token-status');
+
+            resultsDiv.innerHTML = '<div class="result info"><strong>正在登录...</strong></div>';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('auth_token', authToken);
+                    tokenStatus.innerHTML = `<div class="result success"><strong>✅ Token获取成功:</strong> ${authToken.substring(0, 50)}...</div>`;
+                    resultsDiv.innerHTML += '<div class="result success"><strong>登录成功!</strong></div>';
+                } else {
+                    const errorData = await response.json();
+                    resultsDiv.innerHTML += `<div class="result error"><strong>❌ 登录失败:</strong> ${errorData.detail || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error"><strong>❌ 网络错误:</strong> ${error.message}</div>`;
+                tokenStatus.innerHTML = '<div class="result error"><strong>Token状态:</strong> 获取失败</div>';
+            }
+        }
+
+        async function testDocuments() {
+            const resultsDiv = document.getElementById('results');
+
+            if (!authToken) {
+                resultsDiv.innerHTML += '<div class="result error"><strong>❌ 请先登录获取Token</strong></div>';
+                return;
+            }
+
+            resultsDiv.innerHTML += '<div class="result info"><strong>正在测试文档API...</strong></div>';
+
+            try {
+                const response = await fetch('/api/v1/documents/', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultsDiv.innerHTML += `<div class="result success"><strong>✅ 文档API成功:</strong> 获取到 ${data.total || 0} 个文档</div>`;
+
+                    if (data.items && data.items.length > 0) {
+                        let tableHtml = '<table><thead><tr><th>ID</th><th>标题</th><th>文件名</th><th>类型</th><th>文件大小</th></tr></thead><tbody>';
+
+                        data.items.forEach(doc => {
+                            tableHtml += `<tr>
+                                <td>${doc.id}</td>
+                                <td>${doc.title}</td>
+                                <td>${doc.file_name}</td>
+                                <td>${doc.type}</td>
+                                <td>${doc.file_size ? (doc.file_size / 1024).toFixed(2) + ' KB' : '-'}</td>
+                            </tr>`;
+                        });
+
+                        tableHtml += '</tbody></table>';
+                        resultsDiv.innerHTML += `<div class="result success"><strong>文档列表:</strong></div>${tableHtml}`;
+                    } else {
+                        resultsDiv.innerHTML += '<div class="result info"><strong>文档列表:</strong> 暂无文档</div>';
+                    }
+                } else {
+                    const errorText = await response.text();
+                    resultsDiv.innerHTML += `<div class="result error"><strong>❌ 文档API失败:</strong> ${response.status} - ${errorText}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error"><strong>❌ 网络错误:</strong> ${error.message}</div>`;
+                console.error('文档API错误:', error);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('token-status').innerHTML = '<div class="result info"><strong>Token状态:</strong> 未获取</div>';
+            authToken = '';
+            localStorage.removeItem('auth_token');
+        }
+
+        // 页面加载时检查现有token
+        window.onload = function() {
+            const storedToken = localStorage.getItem('auth_token');
+            if (storedToken) {
+                authToken = storedToken;
+                document.getElementById('token-status').innerHTML = `<div class="result success"><strong>✅ 存在Token:</strong> ${authToken.substring(0, 50)}...</div>`;
+            } else {
+                document.getElementById('token-status').innerHTML = '<div class="result info"><strong>Token状态:</strong> 未获取</div>';
+            }
+        };
+    </script>
+</body>
+</html>

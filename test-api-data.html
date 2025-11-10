@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API数据测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .test-section { margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { margin-top: 15px; padding: 15px; border-radius: 4px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+        button { padding: 8px 12px; margin-right: 10px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #40a9ff; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0; }
+        .stat-card { padding: 15px; background: white; border: 1px solid #d9d9d9; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 24px; font-weight: bold; color: #1890ff; }
+        .stat-label { color: #666; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <h1>API数据测试 - 首页数据验证</h1>
+
+    <div class="test-section">
+        <h3>认证状态</h3>
+        <button onclick="checkAuth()">检查认证状态</button>
+        <button onclick="doLogin()">重新登录</button>
+        <div id="auth-status" class="result info">请检查认证状态</div>
+    </div>
+
+    <div class="test-section">
+        <h3>统计数据API测试</h3>
+        <button onclick="testDashboardAPI()">测试 /api/v1/dashboard/overview</button>
+        <button onclick="testMetricsAPI()">测试 /api/v1/metrics/summary</button>
+        <div id="dashboard-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>方案数据API测试</h3>
+        <button onclick="testProposalsAPI()">测试方案列表API</button>
+        <button onclick="testRecentProposals()">测试最近方案</button>
+        <div id="proposals-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>原始响应数据</h3>
+        <button onclick="testAllAPIs()">测试所有API并显示原始数据</button>
+        <div id="raw-results"></div>
+    </div>
+
+    <script>
+        let authToken = '';
+
+        // 检查认证状态
+        async function checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            const authStatus = document.getElementById('auth-status');
+
+            if (token) {
+                authToken = token;
+                authStatus.innerHTML = `<div class="result success">✅ 已找到Token: ${token.substring(0, 50)}...</div>`;
+            } else {
+                authStatus.innerHTML = `<div class="result error">❌ 未找到认证Token，需要先登录</div>`;
+            }
+        }
+
+        // 重新登录
+        async function doLogin() {
+            const authStatus = document.getElementById('auth-status');
+            authStatus.innerHTML = `<div class="result info">正在登录...</div>`;
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('auth_token', authToken);
+                    authStatus.innerHTML = `<div class="result success">✅ 登录成功！Token: ${authToken.substring(0, 50)}...</div>`;
+                } else {
+                    const errorData = await response.json();
+                    authStatus.innerHTML = `<div class="result error">❌ 登录失败: ${errorData.detail || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                authStatus.innerHTML = `<div class="result error">❌ 登录请求失败: ${error.message}</div>`;
+            }
+        }
+
+        // 通用API请求函数
+        async function makeAPIRequest(url, options = {}) {
+            if (!authToken) {
+                throw new Error('未找到认证Token');
+            }
+
+            const defaultOptions = {
+                headers: {
+                    'Authorization': `Bearer ${authToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            };
+
+            const response = await fetch(url, { ...defaultOptions, ...options });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                return await response.json();
+            } else {
+                return await response.text();
+            }
+        }
+
+        // 测试Dashboard API
+        async function testDashboardAPI() {
+            const resultsDiv = document.getElementById('dashboard-results');
+
+            try {
+                resultsDiv.innerHTML = `<div class="result info">正在测试Dashboard API...</div>`;
+
+                const data = await makeAPIRequest('/api/v1/dashboard/overview');
+
+                let html = `
+                    <div class="result success">
+                        <h4>✅ Dashboard API响应成功</h4>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number">${data.total_proposals || 0}</div>
+                                <div class="stat-label">总方案数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.completed_proposals || 0}</div>
+                                <div class="stat-label">已完成方案</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.generating_proposals || 0}</div>
+                                <div class="stat-label">生成中方案</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.total_documents || 0}</div>
+                                <div class="stat-label">总文档数</div>
+                            </div>
+                        </div>
+                        <pre><code>${JSON.stringify(data, null, 2)}</code></pre>
+                    </div>
+                `;
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">❌ Dashboard API失败: ${error.message}</div>`;
+            }
+        }
+
+        // 测试Metrics API
+        async function testMetricsAPI() {
+            const resultsDiv = document.getElementById('dashboard-results');
+
+            try {
+                const data = await makeAPIRequest('/api/v1/metrics/summary');
+
+                let html = `
+                    <div class="result success">
+                        <h4>✅ Metrics API响应成功</h4>
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number">${data.proposal_count || 0}</div>
+                                <div class="stat-label">方案数量</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.document_count || 0}</div>
+                                <div class="stat-label">文档数量</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.template_count || 0}</div>
+                                <div class="stat-label">模板数量</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number">${data.ai_model_count || 0}</div>
+                                <div class="stat-label">AI模型数量</div>
+                            </div>
+                        </div>
+                        <pre><code>${JSON.stringify(data, null, 2)}</code></pre>
+                    </div>
+                `;
+                resultsDiv.innerHTML += html;
+
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error">❌ Metrics API失败: ${error.message}</div>`;
+            }
+        }
+
+        // 测试方案API
+        async function testProposalsAPI() {
+            const resultsDiv = document.getElementById('proposals-results');
+
+            try {
+                resultsDiv.innerHTML = `<div class="result info">正在测试方案API...</div>`;
+
+                const data = await makeAPIRequest('/api/v1/proposals/?limit=5');
+
+                let html = `
+                    <div class="result success">
+                        <h4>✅ 方案API响应成功</h4>
+                        <p><strong>总数量:</strong> ${data.total || 0}</p>
+                        <p><strong>返回条数:</strong> ${data.items ? data.items.length : 0}</p>
+                        <pre><code>${JSON.stringify(data, null, 2)}</code></pre>
+                    </div>
+                `;
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="result error">❌ 方案API失败: ${error.message}</div>`;
+            }
+        }
+
+        // 测试最近方案
+        async function testRecentProposals() {
+            const resultsDiv = document.getElementById('proposals-results');
+
+            try {
+                const data = await makeAPIRequest('/api/v1/proposals/?limit=5&sort=created_at&order=desc');
+
+                let html = `
+                    <div class="result success">
+                        <h4>✅ 最近方案响应成功</h4>
+                        <h5>最近5个方案:</h5>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                            <thead>
+                                <tr style="background: #f5f5f5;">
+                                    <th style="padding: 8px; border: 1px solid #ddd;">ID</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">标题</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">客户</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">状态</th>
+                                    <th style="padding: 8px; border: 1px solid #ddd;">创建时间</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                if (data.items && data.items.length > 0) {
+                    data.items.forEach(item => {
+                        html += `
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.id}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.title}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.customer_name}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${item.status}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">${new Date(item.created_at).toLocaleString()}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    html += `<tr><td colspan="5" style="padding: 8px; border: 1px solid #ddd; text-align: center;">无方案数据</td></tr>`;
+                }
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                resultsDiv.innerHTML += html;
+
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error">❌ 最近方案API失败: ${error.message}</div>`;
+            }
+        }
+
+        // 测试所有API并显示原始数据
+        async function testAllAPIs() {
+            const resultsDiv = document.getElementById('raw-results');
+            resultsDiv.innerHTML = `<div class="result info">正在测试所有API...</div>`;
+
+            const apis = [
+                { name: 'Dashboard Overview', url: '/api/v1/dashboard/overview' },
+                { name: 'Metrics Summary', url: '/api/v1/metrics/summary' },
+                { name: 'Proposals List', url: '/api/v1/proposals/?limit=3' },
+                { name: 'Documents List', url: '/api/v1/documents/?limit=3' },
+                { name: 'Templates List', url: '/api/v1/templates/?limit=3' }
+            ];
+
+            let html = '';
+
+            for (const api of apis) {
+                try {
+                    const data = await makeAPIRequest(api.url);
+                    html += `
+                        <div class="result success">
+                            <h4>✅ ${api.name}</h4>
+                            <pre><code>${JSON.stringify(data, null, 2)}</code></pre>
+                        </div>
+                    `;
+                } catch (error) {
+                    html += `
+                        <div class="result error">
+                            <h4>❌ ${api.name}</h4>
+                            <p>错误: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            }
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // 页面加载时检查认证状态
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>

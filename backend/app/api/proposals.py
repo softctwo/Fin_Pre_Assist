@@ -24,6 +24,8 @@ class ProposalCreate(BaseModel):
     customer_industry: Optional[str] = None
     customer_contact: Optional[str] = None
     requirements: str
+    budget_range: Optional[str] = None
+    timeline: Optional[str] = None
     reference_document_ids: Optional[List[int]] = None
 
 
@@ -38,6 +40,8 @@ class ProposalResponse(BaseModel):
     status: ProposalStatus
     created_at: datetime
     updated_at: datetime
+    budget_range: Optional[str]
+    timeline: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,6 +82,8 @@ async def create_proposal(
         customer_industry=sanitized_data["customer_industry"],
         customer_contact=sanitized_data["customer_contact"],
         requirements=sanitized_data["requirements"],
+        budget_range=proposal_data.budget_range,
+        timeline=proposal_data.timeline,
         status=ProposalStatus.DRAFT,
         user_id=current_user.id,
     )
@@ -216,6 +222,8 @@ async def update_proposal(
     proposal.customer_industry = proposal_data.customer_industry
     proposal.customer_contact = proposal_data.customer_contact
     proposal.requirements = proposal_data.requirements
+    proposal.budget_range = proposal_data.budget_range
+    proposal.timeline = proposal_data.timeline
 
     if proposal_data.reference_document_ids:
         proposal.reference_documents = proposal_data.reference_document_ids

@@ -43,10 +43,14 @@ const MultiModelGenerator = () => {
 
   const loadModels = async () => {
     try {
+      setLoading(true);
       const data = await multiModelProposalService.getAvailableModels();
       setModels(data);
     } catch (error) {
+      console.error('加载模型失败:', error);
       message.error('加载模型失败');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -56,11 +60,11 @@ const MultiModelGenerator = () => {
       return;
     }
 
-    const values = await form.validateFields();
-    setGenerating(true);
-    setResults([]);
-
     try {
+      const values = await form.validateFields();
+      setGenerating(true);
+      setResults([]);
+
       const promises = selectedModels.map(modelId =>
         multiModelProposalService.generateProposal({
           ...values,
@@ -70,13 +74,20 @@ const MultiModelGenerator = () => {
 
       const results = await Promise.all(promises);
       setResults(results.map((result, index) => ({
+        id: result.id,
         model: models.find(m => m.id === selectedModels[index])?.name || `Model ${index + 1}`,
-        ...result
+        title: result.title,
+        status: result.status,
+        executive_summary: result.executive_summary,
+        solution_overview: result.solution_overview,
+        full_content: result.full_content,
+        created_at: result.created_at
       })));
 
       message.success('方案生成完成！');
     } catch (error) {
-      message.error('生成失败: ' + error.message);
+      console.error('生成失败:', error);
+      message.error('生成失败: ' + (error.message || '未知错误'));
     } finally {
       setGenerating(false);
     }
@@ -121,6 +132,8 @@ const MultiModelGenerator = () => {
                     <p>{record.executive_summary || '暂无内容'}</p>
                     <p><strong>解决方案:</strong></p>
                     <p>{record.solution_overview || '暂无内容'}</p>
+                    <p><strong>完整内容:</strong></p>
+                    <p>{record.full_content || '暂无内容'}</p>
                   </div>
                 ),
               });
@@ -135,7 +148,7 @@ const MultiModelGenerator = () => {
 
   return (
     <div>
-      <Card title="多模型方案生成" style={{ marginBottom: 16 }}>
+      <Card title="多模型方案生成" style={{ marginBottom: 16 }} loading={loading}>
         <Form form={form} layout="vertical" initialValues={proposalData}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <Form.Item
@@ -241,7 +254,7 @@ const MultiModelGenerator = () => {
   );
 };
 
-// 简化的主页面
+// 主页面
 const Dashboard = () => {
   const [user, logout] = useAuthStore((state) => state);
   const [activeTab, setActiveTab] = useState('overview');

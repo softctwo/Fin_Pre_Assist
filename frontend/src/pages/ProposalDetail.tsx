@@ -1,11 +1,14 @@
 import React from "react";
 import { useState, useEffect } from 'react'
-import { Card, Descriptions, Button, Space, Tag, message, Spin } from 'antd'
+import { Card, Descriptions, Button, Space, Tag, message, Spin, Tabs } from 'antd'
 import { useParams, useNavigate } from 'react-router-dom'
 import { proposalService, type Proposal } from '../services/proposalService'
-import { ThunderboltOutlined, DownloadOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, DownloadOutlined, BranchesOutlined } from '@ant-design/icons'
 import ProposalGenerationProgress from '../components/ProposalGenerationProgress'
+import MultiModelProposalGenerator from '../components/MultiModelProposalGenerator'
 import { handleFileDownload } from '../utils/fileDownload'
+
+const { TabPane } = Tabs
 
 const ProposalDetail = () => {
   const { id } = useParams<{ id: string }>()
@@ -15,6 +18,7 @@ const ProposalDetail = () => {
   const [generating, setGenerating] = useState(false)
   const [showProgress, setShowProgress] = useState(false)
   const [exporting, setExporting] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('detail')
 
   useEffect(() => {
     if (id) {
@@ -166,47 +170,57 @@ const ProposalDetail = () => {
         </Space>
       </div>
 
-      <Card title="基本信息" style={{ marginBottom: 16 }}>
-        <Descriptions column={2}>
-          <Descriptions.Item label="客户名称">{proposal.customer_name}</Descriptions.Item>
-          <Descriptions.Item label="行业">{proposal.customer_industry || '-'}</Descriptions.Item>
-          <Descriptions.Item label="状态">
-            <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="创建时间">
-            {new Date(proposal.created_at).toLocaleString()}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+        <TabPane tab="基本信息" key="detail">
+          <Card title="基本信息" style={{ marginBottom: 16 }}>
+            <Descriptions column={2}>
+              <Descriptions.Item label="客户名称">{proposal.customer_name}</Descriptions.Item>
+              <Descriptions.Item label="行业">{proposal.customer_industry || '-'}</Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={statusInfo.color}>{statusInfo.text}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="创建时间">
+                {new Date(proposal.created_at).toLocaleString()}
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
 
-      <Card title="客户需求" style={{ marginBottom: 16 }}>
-        <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.requirements}</p>
-      </Card>
+          <Card title="客户需求" style={{ marginBottom: 16 }}>
+            <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.requirements}</p>
+          </Card>
 
-      {proposal.executive_summary && (
-        <Card title="执行摘要" style={{ marginBottom: 16 }}>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.executive_summary}</p>
-        </Card>
-      )}
+          {proposal.executive_summary && (
+            <Card title="执行摘要" style={{ marginBottom: 16 }}>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.executive_summary}</p>
+            </Card>
+          )}
 
-      {proposal.solution_overview && (
-        <Card title="解决方案概述" style={{ marginBottom: 16 }}>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.solution_overview}</p>
-        </Card>
-      )}
+          {proposal.solution_overview && (
+            <Card title="解决方案概述" style={{ marginBottom: 16 }}>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.solution_overview}</p>
+            </Card>
+          )}
 
-      {proposal.technical_details && (
-        <Card title="技术细节" style={{ marginBottom: 16 }}>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.technical_details}</p>
-        </Card>
-      )}
+          {proposal.technical_details && (
+            <Card title="技术细节" style={{ marginBottom: 16 }}>
+              <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.technical_details}</p>
+            </Card>
+          )}
 
-      {proposal.implementation_plan && (
-        <Card title="实施计划">
-          <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.implementation_plan}</p>
-        </Card>
-      )}
-      
+          {proposal.implementation_plan && (
+            <Card title="实施计划">
+              <p style={{ whiteSpace: 'pre-wrap' }}>{proposal.implementation_plan}</p>
+            </Card>
+          )}
+        </TabPane>
+
+        <TabPane tab="多模型生成" key="multi-model">
+          <Card title="多模型方案生成与版本管理">
+            <MultiModelProposalGenerator proposalId={proposal.id} />
+          </Card>
+        </TabPane>
+      </Tabs>
+
       {/* 进度弹窗 */}
       {proposal && (
         <ProposalGenerationProgress

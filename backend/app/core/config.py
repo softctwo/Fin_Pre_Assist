@@ -54,7 +54,11 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: str = ""  # DeepSeek API密钥
     DEEPSEEK_MODEL: str = "deepseek-chat"
 
-    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/deepseek/local
+    KIMI_API_KEY: str = "sk-IUHz5MSl4jeKefsFniWkj909Kg5fKCMZFp9qtnLQLX7bIkYJ"  # Kimi API密钥
+    KIMI_MODEL: str = "moonshot-v1-8k"
+    KIMI_BASE_URL: str = "https://api.moonshot.cn/v1"
+
+    AI_PROVIDER: str = "openai"  # openai/tongyi/wenxin/zhipu/deepseek/kimi/local
 
     # 文件存储配置
     UPLOAD_DIR: str = "./storage/documents"

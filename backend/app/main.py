@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import init_db
 from app.middleware import MetricsMiddleware
-from app.api import auth, documents, proposals, templates, knowledge, search, metrics, websocket
+from app.api import auth, documents, proposals, templates, knowledge, search, metrics, websocket, multi_model_proposals, ai_models
 
 # 配置日志
 logger.remove()
@@ -89,9 +89,11 @@ async def root():
 app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["认证"])
 app.include_router(documents.router, prefix=f"{settings.API_PREFIX}/documents", tags=["文档管理"])
 app.include_router(proposals.router, prefix=f"{settings.API_PREFIX}/proposals", tags=["方案生成"])
+app.include_router(multi_model_proposals.router, prefix=f"{settings.API_PREFIX}/multi-model-proposals", tags=["多模型方案"])
 app.include_router(templates.router, prefix=f"{settings.API_PREFIX}/templates", tags=["模板管理"])
 app.include_router(knowledge.router, prefix=f"{settings.API_PREFIX}/knowledge", tags=["知识库"])
 app.include_router(search.router, prefix=f"{settings.API_PREFIX}/search", tags=["语义搜索"])
+app.include_router(ai_models.router, prefix=f"{settings.API_PREFIX}/ai", tags=["AI模型管理"])
 app.include_router(metrics.router, prefix=f"{settings.API_PREFIX}/metrics", tags=["监控"])
 app.include_router(websocket.router, tags=["WebSocket"])  # WebSocket不使用prefix
 

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认证测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        button { padding: 8px 12px; font-size: 14px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; }
+        button:hover { background: #40a9ff; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 8px; text-align: left; border: 1px solid #ddd; }
+        th { background: #f5f5f5; }
+        .loading { color: #1890ff; }
+    </style>
+</head>
+<body>
+    <h1>认证测试</h1>
+
+    <div class="form-group">
+        <button onclick="testLogin()">登录获取Token</button>
+        <button onclick="testProposals()">测试方案API</button>
+        <button onclick="testAIModels()">测试AI模型API</button>
+        <button onclick="clearResults()">清除结果</button>
+    </div>
+
+    <div id="token-status" class="result info">
+        <strong>Token状态:</strong> 未获取
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        let authToken = '';
+
+        async function testLogin() {
+            const resultsDiv = document.getElementById('results');
+            const tokenStatus = document.getElementById('token-status');
+
+            resultsDiv.innerHTML = '<div class="result info"><strong>正在登录...</strong></div>';
+
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('auth_token', authToken);
+                    tokenStatus.innerHTML = `<div class="result success"><strong>✅ Token获取成功:</strong> ${authToken.substring(0, 50)}...</div>`;
+                    resultsDiv.innerHTML += '<div class="result success"><strong>登录成功!</strong></div>';
+                } else {
+                    const errorData = await response.json();
+                    resultsDiv.innerHTML += `<div class="result error"><strong>❌ 登录失败:</strong> ${errorData.detail || '未知错误'}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error"><strong>❌ 网络错误:</strong> ${error.message}</div>`;
+                tokenStatus.innerHTML = '<div class="result error"><strong>Token状态:</strong> 获取失败</div>';
+            }
+        }
+
+        async function testProposals() {
+            const resultsDiv = document.getElementById('results');
+
+            if (!authToken) {
+                resultsDiv.innerHTML += '<div class="result error"><strong>❌ 请先登录获取Token</strong></div>';
+                return;
+            }
+
+            resultsDiv.innerHTML += '<div class="result info"><strong>正在测试方案API...</strong></div>';
+
+            try {
+                console.log('发送请求，Authorization:', `Bearer ${authToken}`);
+
+                const response = await fetch('/api/v1/proposals/', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                console.log('响应状态:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultsDiv.innerHTML += `<div class="result success"><strong>✅ 方案API成功:</strong> 获取到 ${data.total || 0} 个方案</div>`;
+
+                    if (data.items && data.items.length > 0) {
+                        let tableHtml = '<table><thead><tr><th>ID</th><th>标题</th><th>客户</th><th>状态</th></tr></thead><tbody>';
+
+                        data.items.slice(0, 5).forEach(proposal => {
+                            tableHtml += `<tr>
+                                <td>${proposal.id}</td>
+                                <td>${proposal.title}</td>
+                                <td>${proposal.customer_name}</td>
+                                <td>${proposal.status}</td>
+                            </tr>`;
+                        });
+
+                        tableHtml += '</tbody></table>';
+                        resultsDiv.innerHTML += `<div class="result success"><strong>方案列表 (前5条):</strong></div>${tableHtml}`;
+                    }
+                } else {
+                    const errorText = await response.text();
+                    resultsDiv.innerHTML += `<div class="result error"><strong>❌ 方案API失败:</strong> ${response.status} - ${errorText}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error"><strong>❌ 网络错误:</strong> ${error.message}</div>`;
+                console.error('方案API错误:', error);
+            }
+        }
+
+        async function testAIModels() {
+            const resultsDiv = document.getElementById('results');
+
+            if (!authToken) {
+                resultsDiv.innerHTML += '<div class="result error"><strong>❌ 请先登录获取Token</strong></div>';
+                return;
+            }
+
+            resultsDiv.innerHTML += '<div class="result info"><strong>正在测试AI模型API...</strong></div>';
+
+            try {
+                const response = await fetch('/api/v1/ai/models', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    resultsDiv.innerHTML += `<div class="result success"><strong>✅ AI模型API成功:</strong> 获取到 ${data.length || 0} 个模型</div>`;
+                } else {
+                    const errorText = await response.text();
+                    resultsDiv.innerHTML += `<div class="result error"><strong>❌ AI模型API失败:</strong> ${response.status} - ${errorText}</div>`;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML += `<div class="result error"><strong>❌ 网络错误:</strong> ${error.message}</div>`;
+                console.error('AI模型API错误:', error);
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('token-status').innerHTML = '<div class="result info"><strong>Token状态:</strong> 未获取</div>';
+            authToken = '';
+            localStorage.removeItem('auth_token');
+        }
+
+        // 页面加载时检查现有token
+        window.onload = function() {
+            const storedToken = localStorage.getItem('auth_token');
+            if (storedToken) {
+                authToken = storedToken;
+                document.getElementById('token-status').innerHTML = `<div class="result success"><strong>✅ 存在Token:</strong> ${authToken.substring(0, 50)}...</div>`;
+            } else {
+                document.getElementById('token-status').innerHTML = '<div class="result info"><strong>Token状态:</strong> 未获取</div>';
+            }
+        };
+    </script>
+</body>
+</html>

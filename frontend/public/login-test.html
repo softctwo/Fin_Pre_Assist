@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, button { padding: 8px 12px; font-size: 14px; }
+        input { width: 100%; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #40a9ff; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 4px; }
+        .success { background: #f6ffed; border: 1px solid #b7eb8f; color: #52c41a; }
+        .error { background: #fff2f0; border: 1px solid #ffccc7; color: #ff4d4f; }
+        .info { background: #e6f7ff; border: 1px solid #91d5ff; color: #1890ff; }
+    </style>
+</head>
+<body>
+    <h1>前端登录测试</h1>
+    <div class="form-group">
+        <label for="username">用户名:</label>
+        <input type="text" id="username" value="admin">
+    </div>
+    <div class="form-group">
+        <label for="password">密码:</label>
+        <input type="password" id="password" value="admin123">
+    </div>
+    <button onclick="testLogin()">测试登录</button>
+    <button onclick="testUserAPI()">测试获取用户信息</button>
+    <button onclick="testModelsAPI()">测试模型API</button>
+    <button onclick="clearResults()">清除结果</button>
+    <div id="results"></div>
+
+    <script>
+        let authToken = '';
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            resultsDiv.appendChild(div);
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            addResult(`正在尝试登录用户: ${username}`, 'info');
+
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    addResult(`✅ 登录成功! Token: ${data.access_token.substring(0, 50)}...`, 'success');
+
+                    // 自动测试获取用户信息
+                    setTimeout(testUserAPI, 1000);
+                } else {
+                    const errorData = await response.json();
+                    addResult(`❌ 登录失败: ${errorData.detail || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ 网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testUserAPI() {
+            if (!authToken) {
+                addResult(`❌ 请先登录获取Token`, 'error');
+                return;
+            }
+
+            addResult(`正在测试获取用户信息...`, 'info');
+
+            try {
+                const response = await fetch('/api/v1/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const userData = await response.json();
+                    addResult(`✅ 获取用户信息成功! 用户: ${userData.username} (${userData.role})`, 'success');
+                } else {
+                    const errorData = await response.json();
+                    addResult(`❌ 获取用户信息失败: ${errorData.detail || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ 网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        async function testModelsAPI() {
+            if (!authToken) {
+                addResult(`❌ 请先登录获取Token`, 'error');
+                return;
+            }
+
+            addResult(`正在测试获取AI模型...`, 'info');
+
+            try {
+                const response = await fetch('/api/v1/multi-model-proposals/models/available', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const models = await response.json();
+                    addResult(`✅ 获取AI模型成功! 共 ${models.length} 个模型:`, 'success');
+                    models.forEach(model => {
+                        addResult(`- ${model.name} (${model.provider}) - ${model.description}`, 'info');
+                    });
+                } else {
+                    const errorData = await response.json();
+                    addResult(`❌ 获取AI模型失败: ${errorData.detail || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ 网络错误: ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // 页面加载时显示说明
+        window.onload = function() {
+            addResult('登录测试页面已加载，请点击按钮测试功能', 'info');
+        };
+    </script>
+</body>
+</html>
